@@ -165,6 +165,11 @@ These are logical agents, not separate GPU deployments.
 
 ### 5. Generate and approve the receipt skill contract
 
+Implemented October 17. Kimi K3 generated the contract through the metered
+OpenRouter path. The versioned artifacts and review record live in
+`research/adapter-assets/skills/receipt-to-expense/`. They are approved for
+implementation; project-owner signoff remains required before paid training.
+
 The Skill Architect creates:
 
 ```text
@@ -177,6 +182,10 @@ The contract defines inputs, normalized expense output, rules, exclusions and
 deterministic metrics. It must be approved before dataset construction.
 
 ### 6. Build the remote CORD/SROIE adapter
+
+Implemented and fixture-tested October 17 in `backend/dapta/receipts.py`. Real
+dataset materialization remains remote-gated and will run only through the
+guarded Vultr worker lifecycle in step 8.
 
 The worker reads `research/adapter-assets/sources.lock.json` and then:
 

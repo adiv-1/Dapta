@@ -1,0 +1,26 @@
+{
+  "status": "approved_for_implementation",
+  "architect": {
+    "provider": "openrouter",
+    "model": "moonshotai/kimi-k3",
+    "run_id": "6fa29668-d20b-4ffb-bb0c-8d8e6f12038a",
+    "input_tokens": 336,
+    "output_tokens": 3933,
+    "reasoning_tokens": 2367,
+    "cost_usd": "0.032026644"
+  },
+  "artifact_sha256": {
+    "skill_spec.json": "53e2752024304c966926f386974a6207d441f21b6de9aec2ee28dd2bf90ee89b",
+    "output_schema.json": "8fbecf6888ae3320d5a17e548f9c63aeb7ca1c7d0af049dc6f1fee43c43d3823",
+    "evaluation_plan.json": "81802ef4df48f953ddcbf8d946a9b88f8857bb049cd03e1b237dc2c4279dcc13"
+  },
+  "review_checks": [
+    "strict JSON output with no additional properties",
+    "visible-evidence-only extraction",
+    "unknown fields remain null",
+    "CORD and SROIE mappings remain separate and deterministic",
+    "no policy, eligibility, category, or currency inference",
+    "no model-based scoring in the objective benchmark"
+  ],
+  "project_owner_signoff_required_before_paid_training": true
+}

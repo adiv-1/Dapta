@@ -202,12 +202,13 @@ class FactoryAgents:
             name="skill_architect",
             model=factory_model,
             stage="skill_architect",
-            max_tokens=6000,
+            max_tokens=12000,
             system_prompt=(
                 "You are Dapta's Skill Architect. Convert a stable repetitive workflow into "
                 "a strict JSON contract. Return exactly three top-level objects: skill_spec, "
                 "output_schema, and evaluation_plan. Define deterministic checks and explicit "
-                "exclusions. Do not invent training examples or evaluate a model."
+                "exclusions. Keep the final JSON under 3000 tokens. Do not invent training "
+                "examples, expose chain-of-thought, or evaluate a model."
             ),
         )
         self.data_builder = AgentDefinition(

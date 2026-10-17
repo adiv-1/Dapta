@@ -1,0 +1,58 @@
+{
+  "name": "receipt_to_expense_report",
+  "version": "1.0.0",
+  "description": "Convert one or more receipt images into a normalized expense report containing only visible evidence.",
+  "input": {
+    "modality": "receipt_images",
+    "cardinality": "one_or_more",
+    "constraints": [
+      "each image is processed as one independent receipt object",
+      "no external knowledge, lookup, or context beyond the image pixels"
+    ]
+  },
+  "output": "strict JSON validating against output_schema; receipts array length equals number of input images",
+  "extraction_rules": [
+    "Extract only text visibly printed on the receipt; never guess, impute, or complete partial values.",
+    "Use null for any field not explicitly visible; never use empty strings, placeholders, or defaults.",
+    "merchant: merchant/store name exactly as visible.",
+    "address: address text transcribed as printed; null if no address is visible.",
+    "transaction_date: visible transaction date normalized to ISO 8601 YYYY-MM-DD; null if absent or unresolvably ambiguous.",
+    "currency: ISO 4217 alpha-3 code only when a currency code or unambiguous symbol is explicitly printed; otherwise null; never infer from locale, language, merchant, or address.",
+    "subtotal, tax, service_charge, total: numeric values as printed; null when the corresponding labeled line is absent.",
+    "line_items: one entry per visible purchased item; description as printed; quantity as printed number else null; amount is the printed line total."
+  ],
+  "normalization": {
+    "amounts": "plain decimal numbers; strip currency symbols and thousands separators",
+    "dates": "YYYY-MM-DD",
+    "strings": "trim leading/trailing whitespace; collapse internal whitespace runs"
+  },
+  "exclusions": [
+    "no policy approval determination",
+    "no reimbursement eligibility determination",
+    "no expense category or GL code assignment",
+    "no currency inference",
+    "no fields beyond output_schema",
+    "no commentary, markdown, or chain-of-thought in output"
+  ],
+  "training_data": {
+    "datasets": [
+      "CORD v2 (pinned)",
+      "SROIE (pinned)"
+    ],
+    "label_mapping": {
+      "CORD_v2": {
+        "menu": "line_items",
+        "service": "service_charge",
+        "sub_total": "subtotal",
+        "tax": "tax",
+        "total": "total"
+      },
+      "SROIE": {
+        "address": "address",
+        "company": "merchant",
+        "date": "transaction_date",
+        "total": "total"
+      }
+    }
+  }
+}

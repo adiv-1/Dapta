@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "receipts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "merchant": {
+            "type": ["string", "null"]
+          },
+          "address": {
+            "type": ["string", "null"]
+          },
+          "transaction_date": {
+            "type": ["string", "null"],
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "currency": {
+            "type": ["string", "null"],
+            "pattern": "^[A-Z]{3}$"
+          },
+          "subtotal": {
+            "type": ["number", "null"]
+          },
+          "tax": {
+            "type": ["number", "null"]
+          },
+          "service_charge": {
+            "type": ["number", "null"]
+          },
+          "total": {
+            "type": ["number", "null"]
+          },
+          "line_items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "description": {
+                  "type": ["string", "null"]
+                },
+                "quantity": {
+                  "type": ["number", "null"]
+                },
+                "amount": {
+                  "type": ["number", "null"]
+                }
+              },
+              "required": ["description", "quantity", "amount"]
+            }
+          }
+        },
+        "required": [
+          "merchant",
+          "address",
+          "transaction_date",
+          "currency",
+          "subtotal",
+          "tax",
+          "service_charge",
+          "total",
+          "line_items"
+        ]
+      }
+    }
+  },
+  "required": ["receipts"]
+}

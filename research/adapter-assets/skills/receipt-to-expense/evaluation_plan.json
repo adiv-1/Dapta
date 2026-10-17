@@ -1,0 +1,78 @@
+{
+  "type": "deterministic",
+  "model_based_judging": false,
+  "tolerances": {
+    "amount_abs": 0.01,
+    "arithmetic_abs": 0.02
+  },
+  "metrics": [
+    {
+      "id": "schema_validity",
+      "checks": [
+        "output parses as JSON",
+        "validates against output_schema (draft 2020-12)",
+        "no additional properties at any depth",
+        "absent values are null, never omitted keys or empty strings",
+        "receipts length equals input image count"
+      ],
+      "scoring": "binary per sample; failure zeroes the sample"
+    },
+    {
+      "id": "sroie_field_accuracy",
+      "applies_to": "SROIE-labeled samples",
+      "fields": {
+        "merchant": "company",
+        "transaction_date": "date",
+        "address": "address",
+        "total": "total"
+      },
+      "comparison": {
+        "merchant_address": "casefold, collapse whitespace, strip punctuation; exact match after normalization",
+        "transaction_date": "normalize both sides to YYYY-MM-DD; exact match",
+        "total": "numeric equality within amount_abs"
+      },
+      "scoring": "per-field accuracy, micro-averaged"
+    },
+    {
+      "id": "cord_field_accuracy",
+      "applies_to": "CORD v2-labeled samples",
+      "fields": {
+        "line_items": "menu",
+        "subtotal": "sub_total",
+        "tax": "tax",
+        "service_charge": "service",
+        "total": "total"
+      },
+      "comparison": {
+        "line_items": "match items after description normalization (casefold, whitespace collapse); an item is correct iff description matches and amount is within amount_abs; quantity compared only where labeled",
+        "scalar_amounts": "numeric equality within amount_abs"
+      },
+      "scoring": "line_items: precision/recall/F1; scalar fields: accuracy"
+    },
+    {
+      "id": "arithmetic_consistency",
+      "applies_to": "samples where the required labels are present",
+      "checks": [
+        "subtotal + tax + service_charge == total within arithmetic_abs; null components counted only when gold labels confirm absence",
+        "sum(line_items.amount) == subtotal within arithmetic_abs when subtotal and all line amounts are present"
+      ],
+      "scoring": "binary per check; reported separately from extraction accuracy"
+    },
+    {
+      "id": "exclusion_compliance",
+      "checks": [
+        "no keys named category, approval, approved, reimbursable, reimbursement, eligibility, or policy at any depth",
+        "currency is null unless an explicit currency token is evidenced in the source",
+        "no non-null prediction for any field whose gold label is absent (hallucination check)"
+      ],
+      "scoring": "binary per sample; any violation zeroes the sample"
+    }
+  ],
+  "aggregation": "schema_validity and exclusion_compliance act as gates (fail => sample score 0); field metrics and arithmetic reported separately; overall = micro-averaged field accuracy over gated samples",
+  "exclusions": [
+    "no human or LLM-based judging",
+    "no partial credit for inferred currency, category, or eligibility",
+    "no evaluation on unpinned dataset versions",
+    "no generated or synthetic training examples"
+  ]
+}

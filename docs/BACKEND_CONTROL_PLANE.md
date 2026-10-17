@@ -79,7 +79,7 @@ PYTHONPATH=backend uvicorn dapta.api:app --reload
 
 ## Next boundary
 
-The next implementation step is the deterministic skill contract and dataset
-validator, followed by the Vultr worker. Qwen weights are downloaded inside an
-ephemeral Vultr worker only when the worker lifecycle and guaranteed destruction
-path are ready.
+The receipt contract and remote CORD/SROIE dataset adapter are implemented. The
+next boundary is receipt-specific deterministic validation, followed by the
+guarded Vultr worker lifecycle. Qwen weights are downloaded inside an ephemeral
+Vultr worker only when validation and guaranteed destruction both pass.
