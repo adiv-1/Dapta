@@ -15,7 +15,7 @@ from typing import Any, Callable, Iterable, Mapping
 from .data import REQUIRED_SPLITS, freeze_test, sha256, validate_dataset
 
 
-PREPROCESSING_VERSION = "receipt-cord-sroie-v1"
+PREPROCESSING_VERSION = "receipt-cord-sroie-v2"
 SYSTEM_PROMPT = "Extract visible receipt evidence and return only JSON matching the receipt expense schema."
 USER_PROMPT = "Convert this receipt image into the normalized expense report. Use null for absent fields."
 
@@ -135,6 +135,7 @@ def materialize_receipt_dataset(
                 _write_record(dataset_dir, sroie, "test", "test", row, record)
             )
 
+        deduplicated = _deduplicate_cases(rows, dataset_dir)
         for split in REQUIRED_SPLITS:
             _write_jsonl(dataset_dir / f"{split}.jsonl", rows[split])
         frozen_test_sha = freeze_test(dataset_dir)
@@ -151,6 +152,7 @@ def materialize_receipt_dataset(
                 for source in sources.values()
             },
             "counts": counts,
+            "deduplicated_cases": deduplicated,
             "split_sha256": {
                 split: sha256(dataset_dir / f"{split}.jsonl") for split in REQUIRED_SPLITS
             },
@@ -173,6 +175,27 @@ def materialize_receipt_dataset(
         shutil.rmtree(cache_dir, ignore_errors=True)
 
     return dataset_dir
+
+
+def _deduplicate_cases(
+    rows: dict[str, list[dict[str, Any]]], dataset_dir: Path
+) -> dict[str, int]:
+    seen: set[str] = set()
+    removed = {split: 0 for split in REQUIRED_SPLITS}
+    for split in ("test", "dev", "train"):
+        unique = []
+        for row in rows[split]:
+            digest = hashlib.sha256(row["prompt"].strip().encode())
+            for image in row["images"]:
+                digest.update(bytes.fromhex(sha256(dataset_dir / image)))
+            fingerprint = digest.hexdigest()
+            if fingerprint in seen:
+                removed[split] += 1
+                continue
+            seen.add(fingerprint)
+            unique.append(row)
+        rows[split] = unique
+    return removed
 
 
 def _load_rows(

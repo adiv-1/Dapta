@@ -9,7 +9,7 @@ from unittest.mock import patch
 from PIL import Image
 
 from dapta.data import read_jsonl, validate_dataset
-from dapta.receipts import materialize_receipt_dataset
+from dapta.receipts import _deduplicate_cases, materialize_receipt_dataset
 from dapta.validation import DatasetValidationError, require_valid_receipt_dataset
 
 
@@ -79,6 +79,32 @@ class FakeLoader:
 
 
 class ReceiptDatasetTests(unittest.TestCase):
+    def test_deduplication_preserves_test_then_dev_then_train(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            image = root / "receipt.png"
+            Image.new("RGB", (64, 64), "white").save(image)
+
+            def row(case_id):
+                return {
+                    "id": case_id,
+                    "images": [image.name],
+                    "prompt": "Extract receipt",
+                    "completion": {},
+                }
+
+            rows = {
+                "train": [row("train")],
+                "dev": [row("dev")],
+                "test": [row("test")],
+            }
+
+            removed = _deduplicate_cases(rows, root)
+
+            self.assertEqual(removed, {"train": 1, "dev": 1, "test": 0})
+            self.assertEqual([item["id"] for item in rows["test"]], ["test"])
+            self.assertEqual(rows["train"], [])
+            self.assertEqual(rows["dev"], [])
     def test_remote_worker_guard_blocks_local_downloads(self):
         with tempfile.TemporaryDirectory() as temp:
             with patch.dict(os.environ, {}, clear=True):
