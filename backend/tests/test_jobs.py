@@ -70,7 +70,7 @@ class JobTests(unittest.TestCase):
         )
 
         job = self.orchestrator.complete_integration(
-            job["job_id"], commit_sha="abc123", test_summary={"passed": 12}
+            job["job_id"], commit_sha="a" * 40, test_summary={"passed": 12}
         )
         self.assertEqual(job["status"], "building_dataset")
         job = self.orchestrator.build_dataset(job["job_id"])
@@ -85,7 +85,7 @@ class JobTests(unittest.TestCase):
         for stage in ("provisioning_gpu", "training", "evaluating"):
             job = self.store.transition(job["job_id"], stage)
         job = self.orchestrator.evaluate(
-            job["job_id"], deterministic_report={"exact_match": 0.95}
+            job["job_id"], deterministic_report={"passed": True, "exact_match": 0.95}
         )
         self.assertEqual(job["status"], "publishing")
         self.assertEqual(
@@ -107,7 +107,7 @@ class JobTests(unittest.TestCase):
             idempotency_key="request-004",
         )
         self.store.claim_stage(job["job_id"], "skill_architect")
-        with self.assertRaisesRegex(JobConflict, "already claimed"):
+        with self.assertRaisesRegex(JobConflict, "already claimed: skill_architect round 1"):
             self.store.claim_stage(job["job_id"], "skill_architect")
 
     def test_adapter_registry_is_versioned(self):

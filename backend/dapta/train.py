@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from .data import REQUIRED_SPLITS, sha256, to_training_rows
@@ -10,6 +11,27 @@ from .validation import require_valid_receipt_dataset
 
 
 MODEL_ID = "Qwen/Qwen3-VL-8B-Instruct"
+# Training uploads here; only the publish stage promotes an adapter that passed frozen TEST.
+CANDIDATE_PREFIX = "candidates"
+# Qwen3-VL spends one visual token per 32x32 pixels (patch 16, merge 2). The processor
+# default allows 16.7M pixels (~16k tokens) per image; 1280 tokens keeps receipt text
+# legible while bounding memory and step time on a 48 GB A40.
+DEFAULT_MAX_PIXELS = 1280 * 32 * 32
+# Language-model projections only: the Qwen3-VL vision tower names its layers qkv, proj
+# and linear_fc1/2, so these names leave the vision encoder frozen.
+LORA_TARGETS = ("q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj")
+
+
+@dataclass(frozen=True)
+class TrainOptions:
+    base_model: str = MODEL_ID
+    epochs: float = 2
+    learning_rate: float = 1e-4
+    max_steps: int = -1
+    max_pixels: int = DEFAULT_MAX_PIXELS
+    lora_rank: int = 16
+    # False only for the local CPU check: no 4-bit quantization, no GPU, no upload.
+    gpu: bool = True
 
 
 def train(
@@ -20,6 +42,7 @@ def train(
     *,
     contract_dir: Path,
     source_manifest: Path,
+    options: TrainOptions = TrainOptions(),
 ) -> Path:
     report = require_valid_receipt_dataset(
         dataset_dir,
@@ -27,13 +50,24 @@ def train(
         source_manifest=source_manifest,
     )
 
+    import peft
     import torch
+    import transformers
+    import trl
     from datasets import Dataset
     from huggingface_hub import HfApi
     from peft import LoraConfig, prepare_model_for_kbit_training
     from PIL import Image
     from transformers import AutoProcessor, BitsAndBytesConfig, Qwen3VLForConditionalGeneration
     from trl import SFTConfig, SFTTrainer
+
+    if options.gpu and not torch.cuda.is_available():
+        raise RuntimeError(
+            f"CUDA is not available (torch {torch.__version__}, built for CUDA "
+            f"{torch.version.cuda}); check the worker's NVIDIA driver"
+        )
+    if options.max_pixels < 32 * 32:
+        raise ValueError("max_pixels must allow at least one visual token")
 
     split_counts = report["counts"]
 
@@ -55,44 +89,54 @@ def train(
         json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
 
-    processor = AutoProcessor.from_pretrained(MODEL_ID, token=os.environ.get("HF_TOKEN"))
-    quantization = BitsAndBytesConfig(
-        load_in_4bit=True,
-        bnb_4bit_quant_type="nf4",
-        bnb_4bit_use_double_quant=True,
-        bnb_4bit_compute_dtype=torch.bfloat16,
-    )
-    model = Qwen3VLForConditionalGeneration.from_pretrained(
-        MODEL_ID,
-        token=os.environ.get("HF_TOKEN"),
-        quantization_config=quantization,
-        dtype=torch.bfloat16,
-        attn_implementation="sdpa",
-        device_map={"": 0},
-    )
+    token = os.environ.get("HF_TOKEN")
+    processor = AutoProcessor.from_pretrained(options.base_model, token=token)
+    image_processor = processor.image_processor
+    min_pixels = min(image_processor.size.get("shortest_edge", 32 * 32), options.max_pixels)
+    image_processor.size = {"shortest_edge": min_pixels, "longest_edge": options.max_pixels}
+
+    load_options = {"token": token, "attn_implementation": "sdpa"}
+    if options.gpu:
+        load_options.update(
+            quantization_config=BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_quant_type="nf4",
+                bnb_4bit_use_double_quant=True,
+                bnb_4bit_compute_dtype=torch.bfloat16,
+            ),
+            dtype=torch.bfloat16,
+            device_map={"": 0},
+        )
+    else:
+        load_options.update(dtype=torch.float32, device_map={"": "cpu"})
+    model = Qwen3VLForConditionalGeneration.from_pretrained(options.base_model, **load_options)
     model.config.use_cache = False
-    model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=True)
+    if options.gpu:
+        model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=True)
 
     lora = LoraConfig(
-        r=16,
-        lora_alpha=32,
+        r=options.lora_rank,
+        lora_alpha=2 * options.lora_rank,
         lora_dropout=0.05,
-        target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
+        target_modules=list(LORA_TARGETS),
         bias="none",
         task_type="CAUSAL_LM",
     )
     args = SFTConfig(
         output_dir=str(adapter_dir / "checkpoints"),
-        num_train_epochs=2,
+        num_train_epochs=options.epochs,
+        max_steps=options.max_steps,
         per_device_train_batch_size=1,
         per_device_eval_batch_size=1,
         gradient_accumulation_steps=8,
-        learning_rate=1e-5,
+        learning_rate=options.learning_rate,
         warmup_ratio=0.03,
         lr_scheduler_type="cosine",
-        bf16=True,
+        bf16=options.gpu,
         fp16=False,
-        gradient_checkpointing=True,
+        use_cpu=not options.gpu,
+        gradient_checkpointing=options.gpu,
+        gradient_checkpointing_kwargs={"use_reentrant": False},
         completion_only_loss=True,
         max_length=None,
         packing=False,
@@ -118,25 +162,43 @@ def train(
     metadata = {
         "skill_id": skill_id,
         "version": version,
-        "base_model": MODEL_ID,
+        "base_model": options.base_model,
         "dataset": {
             "counts": split_counts,
             "sha256": {split: sha256(dataset_dir / f"{split}.jsonl") for split in REQUIRED_SPLITS},
         },
-        "method": "4-bit QLoRA",
-        "lora": {"r": 16, "alpha": 32, "dropout": 0.05, "targets": sorted(lora.target_modules)},
-        "training": {"epochs": 2, "batch_size": 1, "gradient_accumulation": 8, "seed": 42},
+        "method": "4-bit QLoRA" if options.gpu else "LoRA (CPU check)",
+        "lora": {
+            "r": lora.r,
+            "alpha": lora.lora_alpha,
+            "dropout": lora.lora_dropout,
+            "targets": sorted(lora.target_modules),
+        },
+        "training": {
+            **asdict(options),
+            "batch_size": 1,
+            "gradient_accumulation": 8,
+            "seed": 42,
+        },
+        "libraries": {
+            "torch": torch.__version__,
+            "transformers": transformers.__version__,
+            "trl": trl.__version__,
+            "peft": peft.__version__,
+        },
         "train_metrics": result.metrics,
     }
     (adapter_dir / "dapta.json").write_text(json.dumps(metadata, indent=2, default=str), encoding="utf-8")
 
     repo_id = os.environ.get("HF_ADAPTER_REPO")
-    if repo_id:
-        HfApi(token=os.environ.get("HF_TOKEN")).upload_folder(
+    if repo_id and options.gpu:
+        HfApi(token=token).upload_folder(
             repo_id=repo_id,
             folder_path=adapter_dir,
-            path_in_repo=f"{skill_id}/{version}",
-            commit_message=f"Publish {skill_id} {version}",
+            path_in_repo=f"{CANDIDATE_PREFIX}/{skill_id}/{version}",
+            commit_message=f"Upload candidate {skill_id} {version}",
+            # Checkpoints hold optimizer state; only the final adapter is uploaded.
+            ignore_patterns=["checkpoints/*", "checkpoints/**"],
         )
     return adapter_dir
 
@@ -155,6 +217,18 @@ def main() -> None:
     parser.add_argument(
         "--sources", type=Path, default=Path("research/adapter-assets/sources.lock.json")
     )
+    defaults = TrainOptions()
+    parser.add_argument("--base-model", default=defaults.base_model)
+    parser.add_argument("--epochs", type=float, default=defaults.epochs)
+    parser.add_argument("--learning-rate", type=float, default=defaults.learning_rate)
+    parser.add_argument("--max-steps", type=int, default=defaults.max_steps)
+    parser.add_argument("--max-pixels", type=int, default=defaults.max_pixels)
+    parser.add_argument("--lora-rank", type=int, default=defaults.lora_rank)
+    parser.add_argument(
+        "--cpu-check",
+        action="store_true",
+        help="run the real pipeline on CPU without quantization or upload (use a tiny model)",
+    )
     args = parser.parse_args()
     path = train(
         args.dataset,
@@ -163,6 +237,15 @@ def main() -> None:
         args.version,
         contract_dir=args.contract,
         source_manifest=args.sources,
+        options=TrainOptions(
+            base_model=args.base_model,
+            epochs=args.epochs,
+            learning_rate=args.learning_rate,
+            max_steps=args.max_steps,
+            max_pixels=args.max_pixels,
+            lora_rank=args.lora_rank,
+            gpu=not args.cpu_check,
+        ),
     )
     print(path)
 

@@ -28,6 +28,8 @@ from .preflight import load_env
 API_URL = "https://api.vultr.com/v2"
 MANAGED_TAG = "dapta-managed"
 CONFIRMATION = "PROVISION"
+DESTROY_CONFIRMATION = "DESTROY"
+DEFAULT_LEDGER_PATH = "artifacts/dapta-ledger.sqlite3"
 SAFE_ID = re.compile(r"[A-Za-z0-9._:-]{1,128}")
 
 
@@ -219,11 +221,14 @@ class SshRunner:
     def prepare(self, host: str, job_id: str, *, limit: int | None, timeout: int) -> None:
         job_id = _safe_value(job_id, "job_id")
         limit_arg = f" --limit {limit}" if limit is not None else ""
+        # Fresh Ubuntu images run cloud-init and unattended-upgrades on first boot, which
+        # hold the dpkg lock; wait for them instead of failing the paid run.
         script = f"""set -euo pipefail
 cd /opt/dapta
 nvidia-smi
-apt-get update
-DEBIAN_FRONTEND=noninteractive apt-get install -y python3-venv
+cloud-init status --wait >/dev/null 2>&1 || true
+apt-get -o DPkg::Lock::Timeout=900 update
+DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=900 install -y python3-venv
 python3 -m venv .venv
 . .venv/bin/activate
 python -m pip install --upgrade pip
@@ -259,7 +264,8 @@ cd /opt/dapta
 set -a
 . .env.worker
 set +a
-python -m pip install -r backend/requirements.txt
+python -m pip install -r backend/requirements-train.txt
+python -c "import torch; assert torch.cuda.is_available(), 'CUDA unavailable: torch ' + torch.__version__ + ' cuda ' + str(torch.version.cuda); print(torch.cuda.get_device_name(0))"
 PYTHONPATH=backend python -m dapta.train --dataset /opt/dapta-jobs/{job_id}/receipt-dataset --output /opt/dapta-jobs/{job_id}/adapters --skill receipt-to-expense --version {version}
 """
         self._run(host, script, timeout)
@@ -299,6 +305,7 @@ class VultrWorker:
         *,
         sleep: Callable[[float], None] = time.sleep,
         monotonic: Callable[[], float] = time.monotonic,
+        on_event: Callable[[str], None] | None = None,
     ):
         self.config = config
         self.client = client
@@ -306,6 +313,7 @@ class VultrWorker:
         self.runner = runner
         self.sleep = sleep
         self.monotonic = monotonic
+        self.on_event = on_event
 
     def plan(self, job_id: str, commit: str, *, limit: int | None) -> dict[str, Any]:
         job_id = _safe_value(job_id, "job_id")
@@ -337,6 +345,8 @@ class VultrWorker:
         limit: int | None,
         confirmation: str,
         validation_report_path: Path | None = None,
+        hf_repo: str | None = None,
+        hf_token: str | None = None,
     ) -> dict[str, Any]:
         if confirmation != CONFIRMATION:
             raise ValueError(f"paid execution requires --confirm-spend {CONFIRMATION}")
@@ -347,7 +357,15 @@ class VultrWorker:
         if limit is not None and limit < 1:
             raise ValueError("limit must be positive")
 
+        # Resolve worker secrets before provisioning so a missing value never costs GPU time.
+        worker_environment = {
+            "HF_TOKEN": (hf_token or "").strip() or _env("HF_TOKEN"),
+            "HF_ADAPTER_REPO": (hf_repo or "").strip() or _env("HF_ADAPTER_REPO"),
+            "DAPTA_REMOTE_WORKER": "1",
+        }
         self.runner.verify_commit(commit)
+        # Fail before provisioning if the ledger cannot record this run's compute.
+        self.ledger.run_summary(run_id)
         self._preflight()
         deadline = self.monotonic() + self.config.max_job_seconds
         label = f"dapta-{job_id[:48]}-{uuid.uuid4().hex[:8]}"
@@ -359,8 +377,13 @@ class VultrWorker:
         try:
             try:
                 instance = self.client.create_instance(payload)
-            except Exception:
-                matches = [item for item in self.client.instances() if item.get("label") == label]
+            except Exception as create_error:
+                try:
+                    listed = self.client.instances()
+                except Exception:
+                    # Keep the creation error; the next preflight sees any orphaned tagged worker.
+                    raise create_error
+                matches = [item for item in listed if item.get("label") == label]
                 if len(matches) != 1:
                     for match in matches:
                         self.client.delete_instance(str(match["id"]))
@@ -368,10 +391,10 @@ class VultrWorker:
                 instance = matches[0]
 
             instance_id = str(instance["id"])
-            allocation_id = f"vultr:{instance_id}"
+            # Only name the allocation once the ledger holds it, so later events cannot fail on it.
             self.ledger.register_compute(
                 run_id=run_id,
-                allocation_id=allocation_id,
+                allocation_id=f"vultr:{instance_id}",
                 provider="vultr",
                 instance_id=instance_id,
                 plan_id=self.config.plan_id,
@@ -383,6 +406,7 @@ class VultrWorker:
                 registered_at=requested_at,
                 metadata={"code_commit": commit, "job_id": job_id},
             )
+            allocation_id = f"vultr:{instance_id}"
             self._event(allocation_id, "provision_requested", requested_at)
             self._event(allocation_id, "created", _provider_time(instance) or _utcnow())
             instance = self._wait_for_instance(instance_id, deadline)
@@ -401,14 +425,7 @@ class VultrWorker:
                 poll_seconds=self.config.poll_seconds,
             )
             self.runner.upload_commit(host, commit)
-            self.runner.upload_environment(
-                host,
-                {
-                    "HF_TOKEN": _env("HF_TOKEN"),
-                    "HF_ADAPTER_REPO": _env("HF_ADAPTER_REPO"),
-                    "DAPTA_REMOTE_WORKER": "1",
-                },
-            )
+            self.runner.upload_environment(host, worker_environment)
             self._event(allocation_id, "workload_started")
             try:
                 self.runner.prepare(host, job_id, limit=limit, timeout=self._remaining(deadline))
@@ -430,6 +447,7 @@ class VultrWorker:
                     "hashes": validation_report.get("hashes", {}),
                 },
             )
+            self._notify("dataset_validated")
             self.runner.train(host, job_id, version, timeout=self._remaining(deadline))
             self._event(allocation_id, "workload_finished")
             return {
@@ -441,19 +459,18 @@ class VultrWorker:
         except BaseException as exc:
             error = exc
             if allocation_id:
-                self._event(allocation_id, "failed", metadata={"error_type": type(exc).__name__})
+                # The original error matters more than a failed bookkeeping write.
+                _attempt(
+                    [],
+                    lambda: self._event(
+                        allocation_id, "failed", metadata={"error_type": type(exc).__name__}
+                    ),
+                )
             raise
         finally:
             try:
                 if instance is not None:
-                    instance_id = str(instance["id"])
-                    if allocation_id:
-                        self._event(allocation_id, "destroy_requested")
-                    self.client.delete_instance(instance_id)
-                    self._wait_for_deletion(instance_id)
-                    if allocation_id:
-                        self._event(allocation_id, "destroyed")
-                        self.ledger.estimate_destroyed_compute_cost(allocation_id)
+                    self._destroy(str(instance["id"]), allocation_id, failed=error is not None)
             except BaseException as destroy_error:
                 if error is not None:
                     raise RuntimeError(
@@ -462,6 +479,22 @@ class VultrWorker:
                 raise
             finally:
                 self.runner.close()
+
+    def _destroy(self, instance_id: str, allocation_id: str | None, *, failed: bool) -> None:
+        # Deletion comes first; ledger writes around it may fail without keeping the VM alive.
+        errors: list[Exception] = []
+        if allocation_id:
+            _attempt(errors, lambda: self._event(allocation_id, "destroy_requested"))
+        self.client.delete_instance(instance_id)
+        self._wait_for_deletion(instance_id)
+        if allocation_id:
+            _attempt(errors, lambda: self._event(allocation_id, "destroyed"))
+            _attempt(errors, lambda: self.ledger.estimate_destroyed_compute_cost(allocation_id))
+        if errors and not failed:
+            raise RuntimeError(
+                f"Vultr instance {instance_id} was deleted, but its ledger record is incomplete: "
+                f"{type(errors[0]).__name__}"
+            ) from errors[0]
 
     def _preflight(self) -> dict[str, Any]:
         if self.config.plan_id not in self.client.available_plans(self.config.region):
@@ -557,6 +590,15 @@ class VultrWorker:
             occurred_at=occurred_at,
             metadata=metadata,
         )
+        self._notify(event_type)
+
+    def _notify(self, event_type: str) -> None:
+        if self.on_event is not None:
+            # Progress callbacks are advisory; they must never block teardown of a billed VM.
+            try:
+                self.on_event(event_type)
+            except Exception:
+                pass
 
 
 @contextmanager
@@ -567,6 +609,13 @@ def worker_lock(path: Path = Path("/tmp/dapta-vultr-worker.lock")) -> Iterator[N
         except BlockingIOError as exc:
             raise RuntimeError("another local Dapta worker command is running") from exc
         yield
+
+
+def _attempt(errors: list[Exception], write: Callable[[], Any]) -> None:
+    try:
+        write()
+    except Exception as error:
+        errors.append(error)
 
 
 def _provider_time(instance: Mapping[str, Any]) -> str | None:
@@ -603,21 +652,39 @@ def _utcnow() -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("command", choices=("plan", "run"))
-    parser.add_argument("--job-id", required=True)
+    parser.add_argument("command", choices=("plan", "run", "status", "destroy"))
+    parser.add_argument("--job-id")
     parser.add_argument("--run-id")
-    parser.add_argument("--commit", required=True)
+    parser.add_argument("--commit")
     parser.add_argument("--version", default="v1-smoke")
     parser.add_argument("--limit", type=int)
     parser.add_argument("--confirm-spend")
+    parser.add_argument("--instance-id")
+    parser.add_argument("--confirm-destroy")
     parser.add_argument("--env", type=Path, default=Path(".env"))
-    parser.add_argument("--ledger", type=Path, default=Path("artifacts/dapta-ledger.sqlite3"))
+    parser.add_argument("--ledger", type=Path)
     parser.add_argument("--artifacts", type=Path, default=Path("artifacts/jobs"))
     args = parser.parse_args()
 
     load_env(args.env)
+    ledger_path = args.ledger or Path(os.environ.get("DAPTA_LEDGER_PATH") or DEFAULT_LEDGER_PATH)
+    if args.command == "status":
+        print(json.dumps(managed_status(VultrClient(_env("VULTR_API_KEY"))), indent=2))
+        return
+    if args.command == "destroy":
+        result = destroy_managed(
+            VultrClient(_env("VULTR_API_KEY")),
+            UsageLedger(ledger_path),
+            instance_id=args.instance_id or "",
+            confirmation=args.confirm_destroy or "",
+        )
+        print(json.dumps(result, indent=2))
+        return
+    if not args.job_id or not args.commit:
+        parser.error(f"{args.command} requires --job-id and --commit")
+
     config = WorkerConfig.from_env()
-    ledger = UsageLedger(args.ledger)
+    ledger = UsageLedger(ledger_path)
     client = VultrClient(config.api_key)
     runner = SshRunner(config, Path.cwd())
     worker = VultrWorker(config, client, ledger, runner)
@@ -626,7 +693,8 @@ def main() -> None:
         runner.close()
         return
 
-    run_id = args.run_id or f"vultr-{args.job_id}"
+    # A fresh run id per attempt, so retrying a job never collides with an earlier ledger row.
+    run_id = args.run_id or f"vultr-{args.job_id}-{uuid.uuid4().hex[:8]}"
     ledger.create_run(
         run_id=run_id,
         run_type="adapter_training",
@@ -645,6 +713,64 @@ def main() -> None:
             validation_report_path=args.artifacts / args.job_id / "validation.json",
         )
     print(json.dumps({**result, "usage": ledger.run_summary(run_id)}, indent=2))
+
+
+def managed_status(client: VultrClient) -> list[dict[str, Any]]:
+    """Every Dapta-tagged instance, including ones a killed process left running."""
+    return [
+        {
+            "id": item.get("id"),
+            "label": item.get("label"),
+            "status": item.get("status"),
+            "power_status": item.get("power_status"),
+            "main_ip": item.get("main_ip"),
+            "date_created": item.get("date_created"),
+            "tags": item.get("tags", []),
+        }
+        for item in client.instances()
+        if MANAGED_TAG in item.get("tags", [])
+    ]
+
+
+def destroy_managed(
+    client: VultrClient,
+    ledger: UsageLedger,
+    *,
+    instance_id: str,
+    confirmation: str,
+    sleep: Callable[[float], None] = time.sleep,
+    monotonic: Callable[[], float] = time.monotonic,
+) -> dict[str, Any]:
+    if confirmation != DESTROY_CONFIRMATION:
+        raise ValueError(f"destroy requires --confirm-destroy {DESTROY_CONFIRMATION}")
+    instance_id = _safe_value(instance_id, "instance_id")
+    instance = client.get_instance(instance_id)
+    if instance is None:
+        return {"instance_id": instance_id, "status": "already_deleted"}
+    # Never touch instances Dapta did not create, such as the serving box.
+    if MANAGED_TAG not in instance.get("tags", []):
+        raise VultrError(f"instance {instance_id} is not tagged {MANAGED_TAG}; refusing to delete")
+    allocation_id = f"vultr:{instance_id}"
+    errors: list[Exception] = []
+    _attempt(errors, lambda: ledger.record_compute_event(
+        allocation_id=allocation_id, event_type="destroy_requested"
+    ))
+    client.delete_instance(instance_id)
+    deadline = monotonic() + 300
+    while client.get_instance(instance_id) is not None:
+        if monotonic() >= deadline:
+            raise TimeoutError("Vultr instance deletion was not confirmed")
+        sleep(15)
+    _attempt(errors, lambda: ledger.record_compute_event(
+        allocation_id=allocation_id, event_type="destroyed"
+    ))
+    _attempt(errors, lambda: ledger.estimate_destroyed_compute_cost(allocation_id))
+    return {
+        "instance_id": instance_id,
+        "status": "deleted",
+        # Missing only when the VM was never registered, e.g. created outside this ledger.
+        "ledger_updated": not errors,
+    }
 
 
 if __name__ == "__main__":

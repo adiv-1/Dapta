@@ -256,13 +256,17 @@ class FactoryAgents:
         )
 
     def build_dataset(
-        self, *, run_id: str, workflow: str, skill_contract: Mapping[str, Any]
+        self,
+        *,
+        run_id: str,
+        workflow: str,
+        skill_contract: Mapping[str, Any],
+        feedback: Mapping[str, Any] | None = None,
     ) -> Mapping[str, Any]:
-        return self._run(
-            self.data_builder,
-            run_id=run_id,
-            payload={"workflow": workflow, "skill_contract": dict(skill_contract)},
-        )
+        payload: dict[str, Any] = {"workflow": workflow, "skill_contract": dict(skill_contract)}
+        if feedback is not None:
+            payload["dev_feedback"] = dict(feedback)
+        return self._run(self.data_builder, run_id=run_id, payload=payload)
 
     def evaluate(
         self, *, run_id: str, deterministic_report: Mapping[str, Any]
