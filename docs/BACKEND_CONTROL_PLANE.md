@@ -79,7 +79,8 @@ PYTHONPATH=backend uvicorn dapta.api:app --reload
 
 ## Next boundary
 
-The receipt contract and remote CORD/SROIE dataset adapter are implemented. The
-next boundary is receipt-specific deterministic validation, followed by the
-guarded Vultr worker lifecycle. Qwen weights are downloaded inside an ephemeral
-Vultr worker only when validation and guaranteed destruction both pass.
+The receipt contract, remote CORD/SROIE adapter, deterministic validation, and
+guarded Vultr worker lifecycle are implemented. The next boundary is the paid,
+limited cloud smoke test. Qwen weights are downloaded inside the ephemeral
+worker only after the remote dataset passes validation, and deletion runs for
+every terminal path.

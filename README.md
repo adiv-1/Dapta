@@ -17,9 +17,12 @@ As of October 17, 2026:
 - The cost ledger, job state machine, and metered OpenRouter agent boundary are
   implemented and tested.
 - Kimi K3 generated the first receipt skill contract through the real pipeline.
-- The pinned CORD v2 and SROIE remote dataset adapter is implemented and tested
-  without downloading either dataset to a teammate's computer.
-- All 22 backend tests pass.
+- The pinned CORD v2 and SROIE remote dataset adapter and receipt-specific
+  validation gate are implemented without downloading either dataset locally.
+- The budget-capped Vultr worker lifecycle is implemented and locally tested.
+- All 29 backend tests pass.
+- A live read-only Vultr plan check confirms the A40 remains available in `ewr`
+  at `$1.712/hour`; the two-hour software ceiling projects at `$3.424`.
 - No Vultr GPU has been created, Qwen has not been downloaded, and no LoRA has
   been trained yet.
 - Sentry, Devin, and ASI:One runtime integration remain for the hackathon.
@@ -211,32 +214,46 @@ No GPU cost was incurred by either attempt.
 
 Dataset rows, receipt images, archives, and model weights are not committed and
 have not been downloaded locally. Tests exercise the complete adapter with
-in-memory fixtures. The real remote materialization waits for the Vultr worker
-lifecycle in Step 8.
+in-memory fixtures. Real remote materialization first runs inside the limited
+cloud smoke test in Step 9.
 
-### 7. Finish deterministic validation — partially complete
+### 7. Finish deterministic validation — complete
 
-The validator already checks required splits, row shape, safe image paths,
-duplicate IDs, duplicate image/prompt cases, split leakage, and the frozen TEST
-hash. Remaining receipt-specific gates are:
+`backend/dapta/validation.py` now gates every receipt dataset on:
 
-- JSON Schema validation of every completion;
+- required splits, safe paths, unique IDs and image/prompt cases;
+- split isolation and the frozen TEST hash;
+- the reviewed Draft 2020-12 output schema and receipt/image cardinality;
 - decoded-image readability and minimum dimensions;
-- amount and line-item arithmetic;
-- source/preprocessor manifest verification; and
-- a validation report that advances or fails the persisted job.
+- receipt totals and line-item arithmetic where the gold labels permit it; and
+- exact source, contract, preprocessing, split-count, and split-hash manifests.
 
-This is the next coding step and must finish before a GPU can be provisioned.
+It emits a structured JSON report. Materialization must pass once, and
+`dapta.train` repeats the check before importing Torch or loading Qwen. The
+report is retained by the controller and included in the adapter uploaded to
+Hugging Face.
 
-### 8. Build the Vultr worker lifecycle — not started
+### 8. Build the Vultr worker lifecycle — code complete and dry-run verified
 
-The worker will check plan availability, create exactly one A40, install the
-pinned environment, check out an exact commit, materialize the remote dataset,
-run training, upload durable artifacts, record final cost, and delete the
-instance in a `finally` path.
+`backend/dapta/vultr.py` now:
 
-Stopping Linux does not stop Vultr billing; the instance must be deleted. Block
-storage is intentionally not used for the first adapter.
+1. checks live plan availability and exact price;
+2. rejects a second Dapta-managed worker;
+3. enforces a `$5` per-job software limit and a two-hour wall-clock deadline;
+4. creates one A40 with no block storage only after `--confirm-spend PROVISION`;
+5. sends an exact Git commit over SSH, so the private GitHub token is never on
+   the worker;
+6. sends only the Hugging Face credentials in a mode-`0600` worker env file;
+7. materializes and validates remote data before installing the training stack
+   or downloading Qwen;
+8. trains and uploads the adapter, metrics, and validation report;
+9. records the entire instance lifetime and calculated cost in the ledger; and
+10. deletes the instance in a `finally` path on success, failure, or timeout.
+
+The Vultr API key remains on the controller. Stopping Linux does not stop
+billing, so deletion—not shutdown—is the terminal action. The `$5` check is an
+application guard, not a Vultr account-level hard cap; teardown failures are
+surfaced as terminal errors rather than hidden.
 
 ### 9. Run the cloud smoke test — not started
 
@@ -330,23 +347,40 @@ Run the API:
 PYTHONPATH=backend uvicorn dapta.api:app --reload
 ```
 
-The real dataset adapter is deliberately remote-gated. On a disposable Vultr
-worker it will be invoked as:
+The real dataset adapter is deliberately remote-gated. The worker controller
+invokes it; teammates should not run it directly on a laptop.
+
+First verify the exact commit, current A40 availability, current price, budget,
+and absence of an existing Dapta worker. This makes no cloud changes:
 
 ```bash
-export DAPTA_REMOTE_WORKER=1
-PYTHONPATH=backend python -m dapta.receipts \
-  --job-dir "/mnt/dapta-job/$JOB_ID"
+PYTHONPATH=backend python -m dapta.vultr plan \
+  --job-id receipt-smoke-001 \
+  --commit "$(git rev-parse HEAD)" \
+  --limit 32
 ```
 
-Do not run that command on a teammate laptop. A small `--limit 32` run is used
-only after the automatic worker teardown path exists.
+Only after reviewing that output, launch the paid Step 9 smoke run:
+
+```bash
+PYTHONPATH=backend python -m dapta.vultr run \
+  --job-id receipt-smoke-001 \
+  --commit "$(git rev-parse HEAD)" \
+  --version v1-smoke \
+  --limit 32 \
+  --confirm-spend PROVISION
+```
+
+`--limit 32` means at most 32 rows from each upstream source split, not 32 rows
+in total. Omit it only for the later full run. The command saves the validation
+report under `artifacts/jobs/`, uploads successful adapter artifacts to the
+configured Hugging Face repository, and always requests instance deletion.
 
 ## Repository map
 
 ```text
 backend/
-  dapta/                 ledger, jobs, agents, receipt adapter, training
+  dapta/                 ledger, jobs, agents, validation, Vultr, training
   tests/                 fast deterministic unit tests
 frontend/                demo application boundary
 docs/                    architecture, build plan, UX, and durable context
@@ -361,13 +395,13 @@ runtime artifacts and must remain outside Git.
 ## Immediate next sequence
 
 ```text
-Finish Step 7 deterministic receipt validation
-  -> implement Step 8 guarded Vultr worker lifecycle
-  -> run Step 9 tiny cloud smoke test
+Review and run Step 9 guarded cloud smoke test
   -> review cost and output
   -> start Step 10 full receipt training
   -> build frontend and sponsor integrations while training runs
 ```
 
-No paid GPU should be created before the validation report, budget checks, and
-automatic deletion path all pass.
+Steps 1–8 are complete on branch `initial-dapta`. No paid GPU was created while
+building them. The branch is ready for a teammate to review and run Step 9, but
+the first paid command should still be the limited smoke run above—not full
+training.

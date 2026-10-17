@@ -38,6 +38,7 @@ def check_configuration() -> CheckResult:
         "VULTR_GPU_PLAN_ID",
         "VULTR_OS_ID",
         "VULTR_SSH_KEY_ID",
+        "VULTR_SSH_PRIVATE_KEY_PATH",
         "VULTR_HOURLY_COST_USD",
         "HF_TOKEN",
         "HF_ADAPTER_REPO",

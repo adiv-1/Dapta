@@ -32,6 +32,7 @@ class PreflightTests(unittest.TestCase):
             "VULTR_GPU_PLAN_ID": "plan",
             "VULTR_OS_ID": "1743",
             "VULTR_SSH_KEY_ID": "key",
+            "VULTR_SSH_PRIVATE_KEY_PATH": "/tmp/id_ed25519",
             "HF_TOKEN": "x",
             "HF_ADAPTER_REPO": "owner/repo",
             "OPENROUTER_API_KEY": "x",

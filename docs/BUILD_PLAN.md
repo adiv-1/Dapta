@@ -200,7 +200,7 @@ computer or committed to Git.
 
 ### 7. Finish deterministic validation
 
-Before a GPU is provisioned, validate:
+Implemented October 17 in `backend/dapta/validation.py`. Validate:
 
 - output schema and required fields;
 - receipt totals and line-item arithmetic;
@@ -211,17 +211,23 @@ Before a GPU is provisioned, validate:
 - safe paths; and
 - dataset and preprocessing version hashes.
 
-Any failure stops the job before GPU spending begins.
+Contract and source pins are checked before provisioning. Because the datasets
+are remote-only, complete image/schema/arithmetic validation runs immediately
+after ephemeral materialization on the worker, before Torch is installed or
+Qwen is downloaded. Any failure stops training and triggers deletion.
 
 ### 8. Build the Vultr worker lifecycle
+
+Implemented and locally tested October 17 in `backend/dapta/vultr.py`; the live
+read-only plan gate passes. The paid lifecycle itself begins in step 9.
 
 The cloud worker must:
 
 1. Check plan availability.
 2. Create the GPU instance.
-3. Install the pinned CUDA and Python environment.
-4. check out the exact code commit.
-5. Retrieve Qwen and temporary datasets.
+3. Verify `nvidia-smi` and install the declared Python environment.
+4. Upload the exact code commit without putting GitHub credentials on the VM.
+5. Materialize and validate temporary datasets, then retrieve Qwen.
 6. Run smoke or full training.
 7. Upload adapters, metrics and manifests.
 8. Destroy the instance after success or terminal failure.

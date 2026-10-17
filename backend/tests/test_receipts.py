@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 import tempfile
@@ -5,8 +6,11 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from PIL import Image
+
 from dapta.data import read_jsonl, validate_dataset
 from dapta.receipts import materialize_receipt_dataset
+from dapta.validation import DatasetValidationError, require_valid_receipt_dataset
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -26,7 +30,8 @@ class FakeImage:
     def save(self, path, format):
         if format != "PNG":
             raise ValueError(format)
-        Path(path).write_bytes(f"image:{self.value}".encode())
+        color = tuple(hashlib.sha256(self.value.encode()).digest()[:3])
+        Image.new("RGB", (64, 64), color).save(path, format="PNG")
 
 
 class FakeLoader:
@@ -122,6 +127,46 @@ class ReceiptDatasetTests(unittest.TestCase):
             manifest = json.loads((dataset_dir / "manifest.json").read_text())
             self.assertEqual(manifest["counts"], counts)
             self.assertEqual(manifest["frozen_test_sha256"], (dataset_dir / "test.sha256").read_text().strip())
+
+            report = require_valid_receipt_dataset(
+                dataset_dir,
+                contract_dir=CONTRACT,
+                source_manifest=SOURCES,
+            )
+            self.assertTrue(report["passed"])
+            self.assertEqual(report["checked"]["images"], 24)
+
+    def test_receipt_validation_rejects_schema_image_and_arithmetic_failures(self):
+        with tempfile.TemporaryDirectory() as temp:
+            dataset_dir = materialize_receipt_dataset(
+                Path(temp),
+                source_manifest=SOURCES,
+                contract_dir=CONTRACT,
+                loader=FakeLoader(),
+                allow_local_test=True,
+            )
+            rows = read_jsonl(dataset_dir / "train.jsonl")
+            rows[0]["completion"]["unexpected"] = True
+            receipt = rows[0]["completion"]["receipts"][0]
+            receipt.update({"subtotal": 10, "tax": 2, "service_charge": 1, "total": 99})
+            (dataset_dir / "train.jsonl").write_text(
+                "".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8"
+            )
+            image = dataset_dir / rows[0]["images"][0]
+            image.write_bytes(b"not an image")
+            report_path = Path(temp) / "validation.json"
+
+            with self.assertRaises(DatasetValidationError) as caught:
+                require_valid_receipt_dataset(
+                    dataset_dir,
+                    contract_dir=CONTRACT,
+                    source_manifest=SOURCES,
+                    report_path=report_path,
+                )
+
+            checks = {item["check"] for item in caught.exception.report["errors"]}
+            self.assertTrue({"output_schema", "image_decode", "scalar_arithmetic"} <= checks)
+            self.assertTrue(report_path.is_file())
 
 
 if __name__ == "__main__":

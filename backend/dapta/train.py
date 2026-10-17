@@ -5,13 +5,28 @@ import json
 import os
 from pathlib import Path
 
-from .data import REQUIRED_SPLITS, sha256, to_training_rows, validate_dataset
+from .data import REQUIRED_SPLITS, sha256, to_training_rows
+from .validation import require_valid_receipt_dataset
 
 
 MODEL_ID = "Qwen/Qwen3-VL-8B-Instruct"
 
 
-def train(dataset_dir: Path, output_dir: Path, skill_id: str, version: str) -> Path:
+def train(
+    dataset_dir: Path,
+    output_dir: Path,
+    skill_id: str,
+    version: str,
+    *,
+    contract_dir: Path,
+    source_manifest: Path,
+) -> Path:
+    report = require_valid_receipt_dataset(
+        dataset_dir,
+        contract_dir=contract_dir,
+        source_manifest=source_manifest,
+    )
+
     import torch
     from datasets import Dataset
     from huggingface_hub import HfApi
@@ -20,7 +35,7 @@ def train(dataset_dir: Path, output_dir: Path, skill_id: str, version: str) -> P
     from transformers import AutoProcessor, BitsAndBytesConfig, Qwen3VLForConditionalGeneration
     from trl import SFTConfig, SFTTrainer
 
-    split_counts = validate_dataset(dataset_dir)
+    split_counts = report["counts"]
 
     def load_split(split: str) -> Dataset:
         rows = to_training_rows(dataset_dir, split)
@@ -36,6 +51,9 @@ def train(dataset_dir: Path, output_dir: Path, skill_id: str, version: str) -> P
     dev_dataset = load_split("dev")
     adapter_dir = output_dir / skill_id / version
     adapter_dir.mkdir(parents=True, exist_ok=False)
+    (adapter_dir / "validation_report.json").write_text(
+        json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
 
     processor = AutoProcessor.from_pretrained(MODEL_ID, token=os.environ.get("HF_TOKEN"))
     quantization = BitsAndBytesConfig(
@@ -129,8 +147,23 @@ def main() -> None:
     parser.add_argument("--output", type=Path, default=Path("artifacts/adapters"))
     parser.add_argument("--skill", required=True)
     parser.add_argument("--version", default="v1")
+    parser.add_argument(
+        "--contract",
+        type=Path,
+        default=Path("research/adapter-assets/skills/receipt-to-expense"),
+    )
+    parser.add_argument(
+        "--sources", type=Path, default=Path("research/adapter-assets/sources.lock.json")
+    )
     args = parser.parse_args()
-    path = train(args.dataset, args.output, args.skill, args.version)
+    path = train(
+        args.dataset,
+        args.output,
+        args.skill,
+        args.version,
+        contract_dir=args.contract,
+        source_manifest=args.sources,
+    )
     print(path)
 
 

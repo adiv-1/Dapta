@@ -159,6 +159,13 @@ def materialize_receipt_dataset(
         (dataset_dir / "manifest.json").write_text(
             json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
         )
+        from .validation import require_valid_receipt_dataset
+
+        require_valid_receipt_dataset(
+            dataset_dir,
+            contract_dir=contract_dir,
+            source_manifest=source_manifest,
+        )
     except Exception:
         shutil.rmtree(dataset_dir, ignore_errors=True)
         raise
