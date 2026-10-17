@@ -247,7 +247,8 @@ Hugging Face.
 1. checks live plan availability and exact price;
 2. rejects a second Dapta-managed worker;
 3. enforces a `$5` per-job software limit and a two-hour wall-clock deadline;
-4. creates one A40 with no block storage only after `--confirm-spend PROVISION`;
+4. creates one A40 on its included local disk, with no separate block-storage
+   volume, only after `--confirm-spend PROVISION`;
 5. sends an exact Git commit over SSH, so the private GitHub token is never on
    the worker;
 6. sends only the Hugging Face credentials in a mode-`0600` worker env file;

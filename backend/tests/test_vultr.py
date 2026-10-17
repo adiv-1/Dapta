@@ -188,7 +188,7 @@ class VultrWorkerTests(unittest.TestCase):
         self.assertEqual(result["status"], "completed")
         self.assertTrue(client.deleted)
         self.assertTrue(runner.closed)
-        self.assertEqual(client.created["block_devices"], [])
+        self.assertNotIn("block_devices", client.created)
         self.assertEqual(client.created["sshkey_id"], ["ssh-key-1"])
         with sqlite3.connect(self.ledger.path) as connection:
             events = {

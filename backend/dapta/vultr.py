@@ -146,7 +146,16 @@ class VultrClient:
                 )
             response.raise_for_status()
         except httpx.HTTPStatusError as exc:
-            raise VultrError(f"Vultr API HTTP {exc.response.status_code} for {method} {path}") from exc
+            detail = ""
+            try:
+                message = exc.response.json().get("error", "")
+                if isinstance(message, str) and message:
+                    detail = f": {message[:200]}"
+            except (AttributeError, TypeError, ValueError):
+                pass
+            raise VultrError(
+                f"Vultr API HTTP {exc.response.status_code} for {method} {path}{detail}"
+            ) from exc
         except httpx.HTTPError as exc:
             raise VultrError(f"Vultr API request failed for {method} {path}: {type(exc).__name__}") from exc
         return response.json() if response.content else {}
@@ -550,7 +559,6 @@ class VultrWorker:
             "backups": "disabled",
             "activation_email": False,
             "enable_ipv6": False,
-            "block_devices": [],
         }
 
     def _wait_for_instance(self, instance_id: str, deadline: float) -> dict[str, Any]:
