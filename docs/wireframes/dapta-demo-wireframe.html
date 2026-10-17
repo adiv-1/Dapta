@@ -1,0 +1,440 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dapta — Demo Wireframe</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #101114;
+      --muted: #686b73;
+      --line: #dddfe4;
+      --panel: #f7f7f5;
+      --surface: #ffffff;
+      --accent: #5b4cf0;
+      --accent-soft: #eeecff;
+      --good: #157a52;
+      --good-soft: #e8f5ef;
+      --warning: #9b5b08;
+      --warning-soft: #fff3df;
+      --dark: #17181c;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--surface);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    button, input { font: inherit; }
+    button { cursor: pointer; }
+
+    .shell {
+      display: grid;
+      grid-template-columns: 220px minmax(0, 1fr);
+      min-height: 100vh;
+    }
+    .sidebar {
+      border-right: 1px solid var(--line);
+      padding: 28px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 28px;
+    }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 750; letter-spacing: -0.03em; }
+    .mark { width: 24px; height: 24px; border: 6px solid var(--accent); border-radius: 50%; position: relative; }
+    .mark::after { content: ""; width: 7px; height: 7px; background: var(--ink); border-radius: 50%; position: absolute; right: -7px; bottom: -4px; }
+    .nav { display: grid; gap: 6px; }
+    .nav button {
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      padding: 11px 12px;
+      border-radius: 10px;
+      text-align: left;
+      font-weight: 650;
+    }
+    .nav button.active { background: var(--panel); color: var(--ink); }
+    .system-note { margin-top: auto; border-top: 1px solid var(--line); padding-top: 18px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+    .online { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--good); margin-right: 7px; }
+
+    main { min-width: 0; }
+    .view { display: none; min-height: 100vh; }
+    .view.active { display: block; }
+    .page { max-width: 1480px; margin: 0 auto; padding: 34px 42px 54px; }
+    .eyebrow { text-transform: uppercase; letter-spacing: .12em; color: var(--muted); font-size: 11px; font-weight: 800; }
+    h1 { font-size: 28px; letter-spacing: -0.04em; margin: 7px 0 8px; }
+    h2 { margin: 0; font-size: 17px; letter-spacing: -0.02em; }
+    p { color: var(--muted); line-height: 1.55; }
+
+    .chat-empty {
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 32px;
+    }
+    .chat-start { width: min(720px, 100%); }
+    .chat-start h1 { font-size: 36px; margin-bottom: 12px; text-align: center; }
+    .chat-start > p { text-align: center; margin: 0 0 28px; }
+    .composer {
+      border: 1px solid #cfd1d7;
+      border-radius: 18px;
+      padding: 14px;
+      background: var(--surface);
+    }
+    .composer input {
+      width: 100%; border: 0; outline: 0; padding: 8px 4px 18px; color: var(--ink); font-size: 15px;
+    }
+    .composer-actions { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+    .attachments { display: flex; gap: 8px; flex-wrap: wrap; }
+    .attachment, .secondary {
+      border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 9px; padding: 8px 11px; font-size: 12px; font-weight: 700;
+    }
+    .primary { border: 0; background: var(--accent); color: white; border-radius: 10px; padding: 10px 16px; font-weight: 750; }
+    .tiny { font-size: 11px; color: var(--muted); margin-top: 11px; text-align: center; }
+
+    .chat-results { display: none; }
+    .chat-results.visible { display: block; }
+    .sticky-composer { position: sticky; top: 0; z-index: 3; background: rgba(255,255,255,.97); border-bottom: 1px solid var(--line); padding: 18px 36px; }
+    .sticky-inner { max-width: 1480px; margin: auto; display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center; }
+    .query { border: 1px solid var(--line); border-radius: 11px; padding: 12px 14px; display: flex; align-items: center; justify-content: space-between; gap: 14px; font-size: 13px; }
+    .query-files { white-space: nowrap; color: var(--muted); font-size: 11px; }
+    .compare { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; padding: 26px 30px 36px; max-width: 1540px; margin: auto; }
+    .lane { border: 1px solid var(--line); border-radius: 16px; min-width: 0; display: flex; flex-direction: column; min-height: calc(100vh - 132px); overflow: hidden; }
+    .lane-head { padding: 15px 16px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+    .pill { border-radius: 999px; padding: 7px 10px; font-size: 11px; font-weight: 800; background: var(--panel); white-space: nowrap; }
+    .pill.qwen { background: var(--accent-soft); color: #4435ca; }
+    .method { color: var(--muted); font-size: 10px; text-align: right; }
+    .lane-body { padding: 17px; flex: 1; }
+    .status { display: flex; align-items: center; gap: 7px; font-size: 11px; color: var(--good); font-weight: 750; margin-bottom: 15px; }
+    .report-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-bottom: 16px; }
+    .meta-item { background: var(--panel); border-radius: 9px; padding: 10px; }
+    .meta-item span { display: block; color: var(--muted); font-size: 9px; text-transform: uppercase; letter-spacing: .08em; }
+    .meta-item strong { display: block; margin-top: 5px; font-size: 12px; }
+    table { width: 100%; border-collapse: collapse; font-size: 11px; }
+    th { color: var(--muted); text-align: left; font-weight: 650; border-bottom: 1px solid var(--line); padding: 8px 5px; }
+    td { border-bottom: 1px solid #ececef; padding: 9px 5px; vertical-align: top; }
+    td:last-child, th:last-child { text-align: right; }
+    .total { display: flex; justify-content: space-between; margin-top: 14px; font-weight: 800; font-size: 13px; }
+    .lane-foot { border-top: 1px solid var(--line); padding: 13px 16px; display: flex; align-items: baseline; justify-content: space-between; }
+    .clock { font-variant-numeric: tabular-nums; font-size: 20px; font-weight: 760; letter-spacing: -0.04em; }
+    .cost { color: var(--muted); font-size: 11px; }
+
+    .page-head { display: flex; justify-content: space-between; align-items: end; gap: 24px; margin-bottom: 30px; }
+    .judge { border: 1px solid var(--line); border-radius: 12px; padding: 10px 13px; font-size: 11px; color: var(--muted); }
+    .judge strong { color: var(--ink); }
+    .history { border: 1px solid var(--line); border-radius: 14px; padding: 18px; margin-bottom: 22px; }
+    .history-head { display: flex; justify-content: space-between; align-items: baseline; gap: 20px; margin-bottom: 18px; }
+    .history-head span { color: var(--muted); font-size: 11px; }
+    .trend-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    .trend { background: var(--panel); border-radius: 11px; padding: 14px; }
+    .trend-label { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .08em; }
+    .trend-values { display: flex; align-items: baseline; gap: 7px; margin: 9px 0 11px; }
+    .trend-values strong { font-size: 22px; letter-spacing: -0.04em; }
+    .trend-values span { color: var(--good); font-size: 10px; font-weight: 750; }
+    .spark { height: 34px; display: flex; align-items: end; gap: 5px; }
+    .spark i { display: block; flex: 1; background: #d9d7fa; border-radius: 3px 3px 0 0; }
+    .spark i:last-child { background: var(--accent); }
+    .run-picker { display: flex; gap: 8px; overflow-x: auto; padding: 2px 0 15px; margin-bottom: 3px; }
+    .run-pill { border: 1px solid var(--line); background: white; color: var(--muted); border-radius: 999px; padding: 9px 13px; white-space: nowrap; font-size: 11px; font-weight: 750; }
+    .run-pill.active { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+    .summary { display: grid; grid-template-columns: 1.3fr repeat(3, .7fr); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; margin-bottom: 24px; }
+    .summary-main, .summary-winner { padding: 16px; }
+    .summary-main { background: var(--dark); color: white; }
+    .summary-main span, .summary-winner span { display: block; text-transform: uppercase; letter-spacing: .08em; font-size: 9px; opacity: .68; margin-bottom: 7px; }
+    .summary-main strong { font-size: 15px; line-height: 1.4; }
+    .summary-winner { border-left: 1px solid var(--line); }
+    .summary-winner strong { font-size: 12px; }
+    .comparison-charts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+    .chart-card { border-top: 1px solid var(--line); padding-top: 17px; }
+    .chart-card p { font-size: 11px; margin: 5px 0 16px; }
+    .section { border-top: 1px solid var(--line); padding-top: 18px; }
+    .chart-row { display: grid; grid-template-columns: 94px 1fr 58px; align-items: center; gap: 9px; margin: 15px 0; font-size: 11px; }
+    .bar-track { height: 11px; background: #ececef; border-radius: 999px; overflow: hidden; }
+    .bar { height: 100%; background: var(--dark); border-radius: inherit; }
+    .bar.qwen { background: var(--accent); }
+    .score-list { display: grid; gap: 10px; margin-top: 16px; }
+    .score { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--line); font-size: 12px; }
+    .source { color: var(--muted); font-size: 10px; margin-top: 18px; }
+
+    .registry-actions { display: flex; gap: 9px; }
+    .registry { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+    .skill-card { border: 1px solid var(--line); border-radius: 14px; padding: 17px; min-height: 215px; display: flex; flex-direction: column; }
+    .skill-top { display: flex; justify-content: space-between; gap: 14px; align-items: start; }
+    .skill-title { font-weight: 800; letter-spacing: -0.02em; }
+    .skill-version { color: var(--muted); font-size: 10px; margin-top: 4px; }
+    .state { font-size: 10px; font-weight: 800; padding: 5px 8px; border-radius: 999px; background: var(--good-soft); color: var(--good); }
+    .state.training { background: var(--warning-soft); color: var(--warning); }
+    .skill-description { font-size: 12px; margin: 16px 0; }
+    .skill-stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 7px; font-size: 10px; color: var(--muted); }
+    .skill-stats strong { display: block; color: var(--ink); font-size: 12px; margin-top: 3px; }
+    .card-action { margin-top: auto; padding-top: 17px; }
+    .progress { height: 8px; border-radius: 99px; background: #e8e8eb; overflow: hidden; margin: 17px 0 10px; }
+    .progress > div { width: 62%; height: 100%; background: var(--accent); }
+    .stage { font-size: 11px; font-weight: 750; }
+    .eta { font-size: 10px; color: var(--muted); margin-top: 5px; }
+    .pipeline { margin-top: 14px; display: grid; gap: 7px; }
+    .pipeline div { color: var(--muted); font-size: 10px; }
+    .pipeline .done { color: var(--good); }
+    .pipeline .current { color: var(--accent); font-weight: 800; }
+
+    @media (max-width: 1000px) {
+      .shell { grid-template-columns: 1fr; }
+      .sidebar { position: sticky; top: 0; z-index: 10; background: white; border-right: 0; border-bottom: 1px solid var(--line); padding: 12px 18px; flex-direction: row; align-items: center; }
+      .nav { display: flex; margin-left: auto; }
+      .system-note { display: none; }
+      .compare, .registry, .comparison-charts, .trend-grid { grid-template-columns: 1fr; }
+      .lane { min-height: auto; }
+      .summary { grid-template-columns: 1fr; }
+      .summary-winner { border-left: 0; border-top: 1px solid var(--line); }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand"><span class="mark"></span> dapta</div>
+      <nav class="nav" aria-label="Main navigation">
+        <button class="active" data-view="chat">Chat</button>
+        <button data-view="performance">Performance</button>
+        <button data-view="skills">Skills &amp; Adapters</button>
+      </nav>
+      <div class="system-note"><span class="online"></span>Qwen3-VL-8B online<br />3 adapters available</div>
+    </aside>
+
+    <main>
+      <section id="chat" class="view active">
+        <div id="chat-empty" class="chat-empty">
+          <div class="chat-start">
+            <div class="eyebrow" style="text-align:center">Compile once. Reuse the skill.</div>
+            <h1>What should Dapta do?</h1>
+            <p>Upload your receipts and describe the finished work you want.</p>
+            <div class="composer">
+              <input id="prompt" value="Create an expense report from these receipts." aria-label="Prompt" />
+              <div class="composer-actions">
+                <div class="attachments">
+                  <button class="attachment">receipt_01.jpg</button>
+                  <button class="attachment">receipt_02.jpg</button>
+                  <button class="attachment">+ Add images</button>
+                </div>
+                <button id="run-demo" class="primary">Run comparison</button>
+              </div>
+            </div>
+            <div class="tiny">The same files will be sent to all three comparison lanes.</div>
+          </div>
+        </div>
+
+        <div id="chat-results" class="chat-results">
+          <div class="sticky-composer">
+            <div class="sticky-inner">
+              <div class="query"><span>Create an expense report from these receipts.</span><span class="query-files">2 images attached</span></div>
+              <button id="reset-demo" class="secondary">New request</button>
+            </div>
+          </div>
+          <div class="compare">
+            <article class="lane">
+              <header class="lane-head"><span class="pill qwen">Qwen LoRA</span><span class="method">Expense adapter<br />short prompt</span></header>
+              <div class="lane-body">
+                <div class="status"><span class="online"></span>Complete</div>
+                <div class="report-meta">
+                  <div class="meta-item"><span>Report</span><strong>LA Hacks travel</strong></div>
+                  <div class="meta-item"><span>Receipts</span><strong>2 verified</strong></div>
+                </div>
+                <table><thead><tr><th>Merchant</th><th>Category</th><th>Amount</th></tr></thead><tbody><tr><td>Westwood Market</td><td>Meals</td><td>$24.81</td></tr><tr><td>Metro Parking</td><td>Transport</td><td>$18.00</td></tr></tbody></table>
+                <div class="total"><span>Total</span><span>$42.81</span></div>
+              </div>
+              <footer class="lane-foot"><div><div class="clock">00:02.41</div><div class="cost">$0.0012 estimated</div></div><span class="pill qwen">Adapter v3</span></footer>
+            </article>
+
+            <article class="lane">
+              <header class="lane-head"><span class="pill">Claude Opus 5.5</span><span class="method">Full SKILL.md<br />frontier baseline</span></header>
+              <div class="lane-body">
+                <div class="status"><span class="online"></span>Complete</div>
+                <div class="report-meta"><div class="meta-item"><span>Report</span><strong>LA Hacks travel</strong></div><div class="meta-item"><span>Receipts</span><strong>2 verified</strong></div></div>
+                <table><thead><tr><th>Merchant</th><th>Category</th><th>Amount</th></tr></thead><tbody><tr><td>Westwood Market</td><td>Meals</td><td>$24.81</td></tr><tr><td>Metro Parking</td><td>Transportation</td><td>$18.00</td></tr></tbody></table>
+                <div class="total"><span>Total</span><span>$42.81</span></div>
+              </div>
+              <footer class="lane-foot"><div><div class="clock">00:08.72</div><div class="cost">$0.094 estimated</div></div><span class="pill">2,846 input tokens</span></footer>
+            </article>
+
+            <article class="lane">
+              <header class="lane-head"><span class="pill">GPT-6 Sol</span><span class="method">Full SKILL.md<br />frontier baseline</span></header>
+              <div class="lane-body">
+                <div class="status"><span class="online"></span>Complete</div>
+                <div class="report-meta"><div class="meta-item"><span>Report</span><strong>LA Hacks travel</strong></div><div class="meta-item"><span>Receipts</span><strong>2 verified</strong></div></div>
+                <table><thead><tr><th>Merchant</th><th>Category</th><th>Amount</th></tr></thead><tbody><tr><td>Westwood Market</td><td>Meal</td><td>$24.81</td></tr><tr><td>Metro Parking</td><td>Transport</td><td>$18.00</td></tr></tbody></table>
+                <div class="total"><span>Total</span><span>$42.81</span></div>
+              </div>
+              <footer class="lane-foot"><div><div class="clock">00:06.18</div><div class="cost">$0.047 estimated</div></div><span class="pill">2,846 input tokens</span></footer>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section id="performance" class="view">
+        <div class="page">
+          <div class="page-head">
+            <div><div class="eyebrow">Measured across saved test runs</div><h1>Performance over time</h1><p>Every run uses identical inputs and output requirements across all three models.</p></div>
+            <div class="judge"><strong>One accuracy agent</strong><br />Checks all three outputs once per test</div>
+          </div>
+
+          <section class="history" aria-label="Performance over time">
+            <div class="history-head"><h2>Qwen LoRA improvement</h2><span>Four completed adapter tests</span></div>
+            <div class="trend-grid">
+              <div class="trend"><div class="trend-label">Accuracy</div><div class="trend-values"><strong>96.0%</strong><span>from 89%</span></div><div class="spark"><i style="height:44%"></i><i style="height:61%"></i><i style="height:78%"></i><i style="height:94%"></i></div></div>
+              <div class="trend"><div class="trend-label">Task time</div><div class="trend-values"><strong>2.41s</strong><span>33% faster</span></div><div class="spark"><i style="height:94%"></i><i style="height:80%"></i><i style="height:66%"></i><i style="height:52%"></i></div></div>
+              <div class="trend"><div class="trend-label">Cost per task</div><div class="trend-values"><strong>$0.0012</strong><span>down 37%</span></div><div class="spark"><i style="height:92%"></i><i style="height:77%"></i><i style="height:65%"></i><i style="height:48%"></i></div></div>
+            </div>
+          </section>
+
+          <div class="run-picker" aria-label="Previously run tests">
+            <button class="run-pill active" data-run="expense">Expense report · Test 04</button>
+            <button class="run-pill" data-run="nda">NDA triage · Test 03</button>
+            <button class="run-pill" data-run="invoice">Invoice compliance · Test 02</button>
+            <button class="run-pill" data-run="receipt">Receipt extraction · Test 01</button>
+          </div>
+
+          <section class="summary" aria-label="Selected test performance summary">
+            <div class="summary-main"><span id="summary-label">Performance summary · Expense report</span><strong id="overall-summary">Qwen LoRA is the best overall: fastest and least expensive while finishing within one accuracy point of the leader.</strong></div>
+            <div class="summary-winner"><span>Fastest</span><strong id="time-winner">Qwen LoRA</strong></div>
+            <div class="summary-winner"><span>Lowest cost</span><strong id="cost-winner">Qwen LoRA</strong></div>
+            <div class="summary-winner"><span>Most accurate</span><strong id="accuracy-winner">Claude Opus 5.5</strong></div>
+          </section>
+
+          <div class="comparison-charts">
+            <section class="chart-card">
+              <h2>Time</h2>
+              <p>Total task duration in seconds. Lower is better.</p>
+              <div class="chart-row"><span>Qwen LoRA</span><div class="bar-track"><div id="time-qwen" class="bar qwen" style="width:28%"></div></div><strong id="time-qwen-value">2.41s</strong></div>
+              <div class="chart-row"><span>Claude</span><div class="bar-track"><div id="time-claude" class="bar" style="width:100%"></div></div><strong id="time-claude-value">8.72s</strong></div>
+              <div class="chart-row"><span>GPT</span><div class="bar-track"><div id="time-gpt" class="bar" style="width:71%"></div></div><strong id="time-gpt-value">6.18s</strong></div>
+            </section>
+            <section class="chart-card">
+              <h2>Cost</h2>
+              <p>Estimated inference cost per completed task. Lower is better.</p>
+              <div class="chart-row"><span>Qwen LoRA</span><div class="bar-track"><div id="cost-qwen" class="bar qwen" style="width:2%"></div></div><strong id="cost-qwen-value">$0.0012</strong></div>
+              <div class="chart-row"><span>Claude</span><div class="bar-track"><div id="cost-claude" class="bar" style="width:100%"></div></div><strong id="cost-claude-value">$0.094</strong></div>
+              <div class="chart-row"><span>GPT</span><div class="bar-track"><div id="cost-gpt" class="bar" style="width:50%"></div></div><strong id="cost-gpt-value">$0.047</strong></div>
+            </section>
+            <section class="chart-card">
+              <h2>Accuracy</h2>
+              <p>Correct outputs as scored by the single accuracy agent.</p>
+              <div class="chart-row"><span>Qwen LoRA</span><div class="bar-track"><div id="accuracy-qwen" class="bar qwen" style="width:96%"></div></div><strong id="accuracy-qwen-value">96%</strong></div>
+              <div class="chart-row"><span>Claude</span><div class="bar-track"><div id="accuracy-claude" class="bar" style="width:97%"></div></div><strong id="accuracy-claude-value">97%</strong></div>
+              <div class="chart-row"><span>GPT</span><div class="bar-track"><div id="accuracy-gpt" class="bar" style="width:95%"></div></div><strong id="accuracy-gpt-value">95%</strong></div>
+            </section>
+          </div>
+          <div class="source">Wireframe data only · the production view will render saved benchmark events without another model call.</div>
+        </div>
+      </section>
+
+      <section id="skills" class="view">
+        <div class="page">
+          <div class="page-head">
+            <div><div class="eyebrow">Shared Qwen3-VL-8B base</div><h1>Skills &amp; Adapters</h1><p>Test a ready specialist or compile a new repeatable workflow.</p></div>
+            <div class="registry-actions"><button class="secondary">Import Skill</button><button class="primary">Create new adapter</button></div>
+          </div>
+          <div class="registry">
+            <article class="skill-card">
+              <div class="skill-top"><div><div class="skill-title">Expense report</div><div class="skill-version">expense-report-v3</div></div><span class="state">Ready</span></div>
+              <p class="skill-description">Extracts receipts, validates expense policy and returns a structured report.</p>
+              <div class="skill-stats"><div>Accuracy<strong>96.0%</strong></div><div>Median time<strong>2.4 sec</strong></div></div>
+              <div class="card-action"><button class="secondary" data-go-chat>Test adapter</button></div>
+            </article>
+            <article class="skill-card">
+              <div class="skill-top"><div><div class="skill-title">NDA triage</div><div class="skill-version">nda-triage-v2</div></div><span class="state">Ready</span></div>
+              <p class="skill-description">Screens inbound NDAs against nine legal and operational review rules.</p>
+              <div class="skill-stats"><div>Accuracy<strong>84.7%</strong></div><div>Input saved<strong>87%</strong></div></div>
+              <div class="card-action"><button class="secondary" data-go-chat>Test adapter</button></div>
+            </article>
+            <article class="skill-card">
+              <div class="skill-top"><div><div class="skill-title">Invoice compliance</div><div class="skill-version">invoice-compliance-v1</div></div><span class="state training">Training</span></div>
+              <p class="skill-description">A newly requested workflow is compiling on Vultr while ready adapters remain available.</p>
+              <div class="progress"><div></div></div>
+              <div class="stage">Training LoRA · epoch 2 of 3</div>
+              <div class="eta">Estimated completion in 2h 47m · Vultr GPU worker</div>
+              <div class="pipeline"><div class="done">Completed: Skill specification</div><div class="done">Completed: Dataset validation</div><div class="current">Current: Training Qwen adapter</div><div>Next: Frozen evaluation</div></div>
+            </article>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const navButtons = [...document.querySelectorAll('[data-view]')];
+    const views = [...document.querySelectorAll('.view')];
+    function showView(id) {
+      navButtons.forEach(button => button.classList.toggle('active', button.dataset.view === id));
+      views.forEach(view => view.classList.toggle('active', view.id === id));
+    }
+    navButtons.forEach(button => button.addEventListener('click', () => showView(button.dataset.view)));
+    document.getElementById('run-demo').addEventListener('click', () => {
+      document.getElementById('chat-empty').style.display = 'none';
+      document.getElementById('chat-results').classList.add('visible');
+    });
+    document.getElementById('reset-demo').addEventListener('click', () => {
+      document.getElementById('chat-results').classList.remove('visible');
+      document.getElementById('chat-empty').style.display = 'grid';
+    });
+    document.querySelectorAll('[data-go-chat]').forEach(button => button.addEventListener('click', () => showView('chat')));
+
+    const testRuns = {
+      expense: {
+        label: 'Expense report',
+        time: { qwen: 2.41, claude: 8.72, gpt: 6.18 },
+        cost: { qwen: 0.0012, claude: 0.094, gpt: 0.047 },
+        accuracy: { qwen: 96, claude: 97, gpt: 95 },
+        summary: 'Qwen LoRA is the best overall: fastest and least expensive while finishing within one accuracy point of the leader.'
+      },
+      nda: {
+        label: 'NDA triage',
+        time: { qwen: 1.86, claude: 7.94, gpt: 5.72 },
+        cost: { qwen: 0.0009, claude: 0.081, gpt: 0.041 },
+        accuracy: { qwen: 92, claude: 90, gpt: 91 },
+        summary: 'Qwen LoRA wins all three measures on NDA triage: highest accuracy, lowest cost, and shortest completion time.'
+      },
+      invoice: {
+        label: 'Invoice compliance',
+        time: { qwen: 3.12, claude: 9.38, gpt: 7.04 },
+        cost: { qwen: 0.0016, claude: 0.102, gpt: 0.052 },
+        accuracy: { qwen: 93, claude: 96, gpt: 94 },
+        summary: 'Qwen LoRA is fastest and least expensive; Claude leads accuracy by three points on this test.'
+      },
+      receipt: {
+        label: 'Receipt extraction',
+        time: { qwen: 2.88, claude: 8.42, gpt: 6.61 },
+        cost: { qwen: 0.0014, claude: 0.089, gpt: 0.045 },
+        accuracy: { qwen: 89, claude: 95, gpt: 93 },
+        summary: 'Qwen LoRA leads time and cost, but the accuracy gap shows why the adapter needed additional training rounds.'
+      }
+    };
+
+    const fullNames = { qwen: 'Qwen LoRA', claude: 'Claude Opus 5.5', gpt: 'GPT-6 Sol' };
+    const bestKey = (values, direction) => Object.entries(values).sort((a, b) => direction === 'min' ? a[1] - b[1] : b[1] - a[1])[0][0];
+    const setMetric = (metric, values, formatter) => {
+      const max = Math.max(...Object.values(values));
+      Object.entries(values).forEach(([model, value]) => {
+        document.getElementById(`${metric}-${model}`).style.width = `${Math.max(2, value / max * 100)}%`;
+        document.getElementById(`${metric}-${model}-value`).textContent = formatter(value);
+      });
+    };
+    const selectRun = runId => {
+      const run = testRuns[runId];
+      document.querySelectorAll('.run-pill').forEach(pill => pill.classList.toggle('active', pill.dataset.run === runId));
+      document.getElementById('summary-label').textContent = `Performance summary · ${run.label}`;
+      document.getElementById('overall-summary').textContent = run.summary;
+      document.getElementById('time-winner').textContent = fullNames[bestKey(run.time, 'min')];
+      document.getElementById('cost-winner').textContent = fullNames[bestKey(run.cost, 'min')];
+      document.getElementById('accuracy-winner').textContent = fullNames[bestKey(run.accuracy, 'max')];
+      setMetric('time', run.time, value => `${value.toFixed(2)}s`);
+      setMetric('cost', run.cost, value => value < .01 ? `$${value.toFixed(4)}` : `$${value.toFixed(3)}`);
+      setMetric('accuracy', run.accuracy, value => `${value}%`);
+    };
+    document.querySelectorAll('.run-pill').forEach(pill => pill.addEventListener('click', () => selectRun(pill.dataset.run)));
+  </script>
+</body>
+</html>

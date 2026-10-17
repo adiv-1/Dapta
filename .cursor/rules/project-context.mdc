@@ -1,0 +1,26 @@
+---
+description: Persistent product and evidence context for the Dapta LA Hacks project
+alwaysApply: true
+---
+
+# Dapta Project Context
+
+Before planning, implementing, evaluating, or pitching this project, read
+`docs/PROJECT_CONTEXT.md`. Treat it as the durable source of project intent and
+update it when the team makes a consequential decision or produces new verified
+evidence.
+
+Core guardrails:
+
+- Dapta compiles stable, repetitive, evaluable AI workflows into verified,
+  hot-swappable LoRA specialists on a shared open-weight base model.
+- Keep measured facts, proposed architecture, illustrative economics, and future
+  vision explicitly separated.
+- Do not claim that LoRA removes inference, tools, reasoning, or all runtime cost.
+- Do not claim latency or dollar-cost wins until they are measured defensibly.
+- Preserve frozen held-out tests and prefer deterministic ground truth wherever
+  the workflow permits it.
+- Route uncertain, unfamiliar, dynamic, or tool-dependent work to the general
+  path or human review rather than forcing a specialist.
+- The old `skill2lora` repository is source material and a proven POC; migration
+  into this repository must be planned before files are copied or rewritten.
