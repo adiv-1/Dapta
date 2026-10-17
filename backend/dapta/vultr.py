@@ -412,6 +412,13 @@ class VultrWorker:
         instance: dict[str, Any] | None = None
         allocation_id: str | None = None
         error: BaseException | None = None
+        succeeded = False
+        self.ledger.record_run_event(
+            run_id=run_id,
+            stage="vultr_worker",
+            status="started",
+            metadata={"skill_id": skill_id, "smoke": smoke},
+        )
         try:
             try:
                 instance = self.client.create_instance(payload)
@@ -501,6 +508,7 @@ class VultrWorker:
                 timeout=self._remaining(deadline),
             )
             self._event(allocation_id, "workload_finished")
+            succeeded = True
             return {
                 "instance_id": instance_id,
                 "allocation_id": allocation_id,
@@ -509,6 +517,12 @@ class VultrWorker:
             }
         except BaseException as exc:
             error = exc
+            self.ledger.record_run_event(
+                run_id=run_id,
+                stage="vultr_worker",
+                status="failed",
+                metadata={"error_type": type(exc).__name__, "skill_id": skill_id, "smoke": smoke},
+            )
             if allocation_id:
                 self._event(allocation_id, "failed", metadata={"error_type": type(exc).__name__})
             raise
@@ -524,11 +538,30 @@ class VultrWorker:
                         self._event(allocation_id, "destroyed")
                         self.ledger.estimate_destroyed_compute_cost(allocation_id)
             except BaseException as destroy_error:
+                if error is None:
+                    self.ledger.record_run_event(
+                        run_id=run_id,
+                        stage="vultr_worker",
+                        status="failed",
+                        metadata={
+                            "error_type": type(destroy_error).__name__,
+                            "skill_id": skill_id,
+                            "smoke": smoke,
+                        },
+                    )
                 if error is not None:
                     raise RuntimeError(
                         f"worker failed and automatic Vultr deletion also failed: {type(destroy_error).__name__}"
                     ) from destroy_error
                 raise
+            else:
+                if succeeded:
+                    self.ledger.record_run_event(
+                        run_id=run_id,
+                        stage="vultr_worker",
+                        status="completed",
+                        metadata={"skill_id": skill_id, "smoke": smoke},
+                    )
             finally:
                 self.runner.close()
 

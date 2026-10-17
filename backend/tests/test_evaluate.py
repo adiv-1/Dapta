@@ -114,6 +114,33 @@ class ReceiptEvaluatorTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "unknown case"):
                 evaluate_receipts(root, predictions, contract_dir=CONTRACT)
 
+    def test_failed_gate_remains_in_accuracy_denominator(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            self.make_dataset(root)
+            first = json.loads((root / "test.jsonl").read_text(encoding="utf-8"))
+            second = {**first, "id": "test-2", "prompt": "Extract the second receipt."}
+            second_image = root / "test-2.png"
+            second_image.write_bytes(b"test-2")
+            second["images"] = [second_image.name]
+            (root / "test.jsonl").write_text(
+                json.dumps(first) + "\n" + json.dumps(second) + "\n", encoding="utf-8"
+            )
+            freeze_test(root)
+            predictions = root / "predictions.jsonl"
+            predictions.write_text(
+                json.dumps({"id": "test-1", "condition": "model", "output": receipt()})
+                + "\n"
+                + json.dumps({"id": "test-2", "condition": "model", "output": {}})
+                + "\n",
+                encoding="utf-8",
+            )
+
+            report = evaluate_receipts(root, predictions, contract_dir=CONTRACT)
+
+            self.assertEqual(report["conditions"]["model"]["field_total"], 8)
+            self.assertEqual(report["conditions"]["model"]["accuracy"], 0.5)
+
 
 if __name__ == "__main__":
     unittest.main()

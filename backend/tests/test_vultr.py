@@ -14,8 +14,9 @@ COMMIT = "a" * 40
 
 
 class FakeClient:
-    def __init__(self, *, active=None):
+    def __init__(self, *, active=None, fail_delete=False):
         self.active = active or []
+        self.fail_delete = fail_delete
         self.created = None
         self.deleted = False
 
@@ -53,6 +54,8 @@ class FakeClient:
         }
 
     def delete_instance(self, instance_id):
+        if self.fail_delete:
+            raise RuntimeError("deletion failed")
         self.deleted = True
 
 
@@ -198,6 +201,13 @@ class VultrWorkerTests(unittest.TestCase):
                 )
             }
             cost_count = connection.execute("SELECT COUNT(*) FROM compute_costs").fetchone()[0]
+            run_statuses = [
+                row[0]
+                for row in connection.execute(
+                    "SELECT status FROM run_events "
+                    "WHERE run_id = 'run-1' AND stage = 'vultr_worker' ORDER BY occurred_at"
+                )
+            ]
         self.assertEqual(
             events,
             {
@@ -211,6 +221,7 @@ class VultrWorkerTests(unittest.TestCase):
             },
         )
         self.assertEqual(cost_count, 1)
+        self.assertEqual(run_statuses, ["started", "completed"])
 
     @patch.dict(
         os.environ,
@@ -234,7 +245,37 @@ class VultrWorkerTests(unittest.TestCase):
             failures = connection.execute(
                 "SELECT COUNT(*) FROM compute_events WHERE event_type = 'failed'"
             ).fetchone()[0]
+            run_failures = connection.execute(
+                "SELECT COUNT(*) FROM run_events WHERE status = 'failed'"
+            ).fetchone()[0]
         self.assertEqual(failures, 1)
+        self.assertEqual(run_failures, 1)
+
+    @patch.dict(
+        os.environ,
+        {"HF_TOKEN": "hf-secret", "HF_ADAPTER_REPO": "owner/adapters"},
+        clear=True,
+    )
+    def test_deletion_failure_never_marks_run_completed(self):
+        client = FakeClient(fail_delete=True)
+        with self.assertRaisesRegex(RuntimeError, "deletion failed"):
+            self.worker(client, FakeRunner()).run(
+                run_id="run-1",
+                job_id="job-1",
+                commit=COMMIT,
+                version="v1-smoke",
+                limit=32,
+                confirmation=CONFIRMATION,
+            )
+        with sqlite3.connect(self.ledger.path) as connection:
+            statuses = [
+                row[0]
+                for row in connection.execute(
+                    "SELECT status FROM run_events "
+                    "WHERE run_id = 'run-1' AND stage = 'vultr_worker' ORDER BY occurred_at"
+                )
+            ]
+        self.assertEqual(statuses, ["started", "failed"])
 
     def test_existing_managed_worker_blocks_another_instance(self):
         client = FakeClient(active=[{"id": "existing", "tags": ["dapta-managed"]}])

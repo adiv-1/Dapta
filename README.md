@@ -21,7 +21,7 @@ As of October 17, 2026:
   validation gate are implemented without downloading either dataset locally.
 - The budget-capped Vultr worker lifecycle is implemented and locally tested.
 - The local controller environment is installed with its lightweight dependency
-  set; all 35 backend tests pass.
+  set; all 37 backend tests pass.
 - The full receipt evaluator is implemented and reports accuracy, time, cost,
   tokens, schema failures, hallucinations, line-item F1, and arithmetic checks
   separately for every benchmark condition.
@@ -32,6 +32,10 @@ As of October 17, 2026:
   at `$1.712/hour`; the two-hour software ceiling projects at `$3.424`.
 - No Vultr GPU has been created, Qwen has not been downloaded, and no LoRA has
   been trained yet.
+- Two smoke provisioning requests were rejected before allocation because the
+  Vultr account's maximum-instance-cost limit is below the A40 plan's
+  `$1,250/month` list price. The local ledger confirms zero allocations and
+  `$0` compute cost for both attempts.
 - Sentry, Devin, and ASI:One runtime integration remain for the hackathon.
 
 ## Demo promise
@@ -263,9 +267,17 @@ billing, so deletion—not shutdown—is the terminal action. The `$5` check is 
 application guard, not a Vultr account-level hard cap; teardown failures are
 surfaced as terminal errors rather than hidden.
 
-### 9. Run the cloud smoke test — ready to launch
+### 9. Run the cloud smoke test — code ready; Vultr account limit blocks launch
 
-After Steps 7 and 8:
+Vultr checks an account's maximum instance cost against the plan's monthly list
+price even when the instance is billed hourly and deleted after the test. In
+the Vultr console, open **Account → Billing → Limits**, choose **Request Limit
+Increase**, and request a maximum instance cost of at least `$1,250`. Explain
+that this is an LA Hacks GPU smoke/training worker billed at `$1.712/hour` and
+destroyed automatically within two hours. Raising eligibility does not change
+the controller's `$5` per-job guard or create an instance.
+
+After that provider limit is approved:
 
 1. verify `nvidia-smi`;
 2. download Qwen3-VL-8B on the worker;

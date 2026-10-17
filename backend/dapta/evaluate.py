@@ -117,8 +117,9 @@ def _score_case(
     line_expected = 0
     arithmetic_passed = 0
     arithmetic_total = 0
-    if cardinality_valid:
-        for expected, actual in zip(expected_receipts, predicted_receipts):
+    for receipt_index, expected in enumerate(expected_receipts):
+        actual = predicted_receipts[receipt_index] if cardinality_valid else {}
+        if isinstance(actual, dict):
             source_id = gold_row.get("metadata", {}).get("source_id")
             fields = (
                 ("merchant", "address", "transaction_date", "total")
