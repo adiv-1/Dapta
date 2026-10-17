@@ -21,21 +21,22 @@ As of October 17, 2026:
   validation gate are implemented without downloading either dataset locally.
 - The budget-capped Vultr worker lifecycle is implemented and locally tested.
 - The local controller environment is installed with its lightweight dependency
-  set; all 37 backend tests pass.
+  set; all 38 backend tests pass.
 - The full receipt evaluator is implemented and reports accuracy, time, cost,
   tokens, schema failures, hallucinations, line-item F1, and arithmetic checks
   separately for every benchmark condition.
 - The dashboard adapter pipeline is implemented with pinned nvBench training /
   validation data, a frozen PandasPlotBench test set, and a pinned public
   dashboard-skill reference. All source data remains remote-only.
-- A live read-only Vultr plan check confirms the A40 remains available in `ewr`
-  at `$1.712/hour`; the two-hour software ceiling projects at `$3.424`.
+- A live read-only Vultr plan check confirms a one-GPU A16 is available in
+  `ewr` at `$0.471/hour`; the two-hour software ceiling projects at `$0.942`.
 - No Vultr GPU has been created, Qwen has not been downloaded, and no LoRA has
   been trained yet.
-- Two smoke provisioning requests were rejected before allocation because the
-  Vultr account's maximum-instance-cost limit is below the A40 plan's
-  `$1,250/month` list price. The local ledger confirms zero allocations and
-  `$0` compute cost for both attempts.
+- Two A40 smoke provisioning requests were rejected before allocation because
+  the account limit is below that plan's `$1,250/month` list price. The local
+  ledger confirms zero allocations and `$0` compute cost for both attempts.
+  The smoke worker now uses the deployable `$344/month` A16 fallback; A40
+  remains the preferred full-training worker if Vultr approves the increase.
 - Sentry, Devin, and ASI:One runtime integration remain for the hackathon.
 
 ## Demo promise
@@ -251,8 +252,8 @@ Hugging Face.
 1. checks live plan availability and exact price;
 2. rejects a second Dapta-managed worker;
 3. enforces a `$5` per-job software limit and a two-hour wall-clock deadline;
-4. creates one A40 on its included local disk, with no separate block-storage
-   volume, only after `--confirm-spend PROVISION`;
+4. creates the configured GPU on its included local disk, with no separate
+   block-storage volume, only after `--confirm-spend PROVISION`;
 5. sends an exact Git commit over SSH, so the private GitHub token is never on
    the worker;
 6. sends only the Hugging Face credentials in a mode-`0600` worker env file;
@@ -267,17 +268,13 @@ billing, so deletion—not shutdown—is the terminal action. The `$5` check is 
 application guard, not a Vultr account-level hard cap; teardown failures are
 surfaced as terminal errors rather than hidden.
 
-### 9. Run the cloud smoke test — code ready; Vultr account limit blocks launch
+### 9. Run the cloud smoke test — A16 fallback ready
 
-Vultr checks an account's maximum instance cost against the plan's monthly list
-price even when the instance is billed hourly and deleted after the test. In
-the Vultr console, open **Account → Billing → Limits**, choose **Request Limit
-Increase**, and request a maximum instance cost of at least `$1,250`. Explain
-that this is an LA Hacks GPU smoke/training worker billed at `$1.712/hour` and
-destroyed automatically within two hours. Raising eligibility does not change
-the controller's `$5` per-job guard or create an instance.
-
-After that provider limit is approved:
+The A40 requires a pending account-limit increase, so the smoke worker uses one
+NVIDIA A16 with 16 GB VRAM. Qwen loads in 4-bit, image resolution is capped at
+the Qwen training project's 576-token profile, sequences are capped at 2,048,
+batch size remains one, and gradient checkpointing is enabled. The A16 costs
+`$0.471/hour`, or at most `$0.942` under the two-hour controller deadline.
 
 1. verify `nvidia-smi`;
 2. download Qwen3-VL-8B on the worker;
@@ -287,7 +284,8 @@ After that provider limit is approved:
 6. upload the smoke adapter and manifest to Hugging Face; and
 7. delete the worker.
 
-The smoke test must pass before a full training run.
+The smoke test must pass before a full training run. A16 is the immediate
+fallback; A40 remains the full-run target if Vultr approves its limit in time.
 
 ### 10. Train the first receipt adapter — not started
 

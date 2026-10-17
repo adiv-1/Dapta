@@ -13,6 +13,9 @@ from .validation import require_valid_receipt_dataset
 
 MODEL_ID = "Qwen/Qwen3-VL-8B-Instruct"
 MODEL_REVISION = "0c351dd01ed87e9c1b53cbc748cba10e6187ff3b"
+MIN_IMAGE_PIXELS = 16 * 28 * 28
+MAX_IMAGE_PIXELS = 576 * 28 * 28
+MAX_SEQUENCE_LENGTH = 2048
 
 
 def train(
@@ -81,6 +84,8 @@ def train(
         MODEL_ID,
         revision=MODEL_REVISION,
         token=os.environ.get("HF_TOKEN"),
+        min_pixels=MIN_IMAGE_PIXELS,
+        max_pixels=MAX_IMAGE_PIXELS,
     )
     quantization = BitsAndBytesConfig(
         load_in_4bit=True,
@@ -128,7 +133,7 @@ def train(
         fp16=False,
         gradient_checkpointing=True,
         completion_only_loss=True,
-        max_length=None,
+        max_length=MAX_SEQUENCE_LENGTH,
         packing=False,
         eval_strategy="epoch",
         save_strategy="epoch",
@@ -194,6 +199,9 @@ def train(
             "batch_size": 1,
             "gradient_accumulation": 8,
             "learning_rate": 1e-4,
+            "min_image_pixels": MIN_IMAGE_PIXELS,
+            "max_image_pixels": MAX_IMAGE_PIXELS,
+            "max_sequence_length": MAX_SEQUENCE_LENGTH,
             "seed": 42,
         },
         "train_metrics": result.metrics,

@@ -364,13 +364,15 @@ class VultrWorker:
         skill_id = _skill_id(skill_id)
         self.runner.verify_commit(commit)
         plan = self._preflight()
+        gpu_type, gpu_count = _gpu_details(self.config.plan_id, plan)
         return {
             "job_id": job_id,
             "skill_id": skill_id,
             "commit": commit,
             "region": self.config.region,
             "plan_id": self.config.plan_id,
-            "gpu": plan.get("gpu_type", "NVIDIA A40"),
+            "gpu": gpu_type,
+            "gpu_count": gpu_count,
             "hourly_cost_usd": str(self.config.hourly_cost_usd),
             "max_job_seconds": self.config.max_job_seconds,
             "projected_max_cost_usd": str(self.config.projected_cost_usd),
@@ -404,7 +406,8 @@ class VultrWorker:
             raise ValueError("limit must be positive")
 
         self.runner.verify_commit(commit)
-        self._preflight()
+        plan = self._preflight()
+        gpu_type, gpu_count = _gpu_details(self.config.plan_id, plan)
         deadline = self.monotonic() + self.config.max_job_seconds
         label = f"dapta-{job_id[:48]}-{uuid.uuid4().hex[:8]}"
         payload = self._create_payload(job_id, label)
@@ -439,8 +442,8 @@ class VultrWorker:
                 instance_id=instance_id,
                 plan_id=self.config.plan_id,
                 region=self.config.region,
-                gpu_type="NVIDIA A40",
-                gpu_count=1,
+                gpu_type=gpu_type,
+                gpu_count=gpu_count,
                 hourly_cost_usd=self.config.hourly_cost_usd,
                 pricing_source="vultr-plan-api",
                 registered_at=requested_at,
@@ -691,6 +694,23 @@ def _skill_id(value: str) -> str:
     if value not in {"receipt-to-expense", "csv-to-dashboard"}:
         raise ValueError(f"unsupported skill: {value}")
     return value
+
+
+def _gpu_details(plan_id: str, plan: Mapping[str, Any]) -> tuple[str, int]:
+    gpu_type = plan.get("gpu_type")
+    gpu_count = plan.get("gpu_count")
+    if not gpu_type:
+        if "-a16-" in plan_id:
+            gpu_type = "NVIDIA A16"
+        elif "-a40-" in plan_id:
+            gpu_type = "NVIDIA A40"
+        elif "-l40s-" in plan_id:
+            gpu_type = "NVIDIA L40S"
+        else:
+            gpu_type = plan_id
+    if not isinstance(gpu_count, int) or gpu_count < 1:
+        gpu_count = 1
+    return str(gpu_type), gpu_count
 
 
 def _env(name: str) -> str:

@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from dapta.ledger import UsageLedger
-from dapta.vultr import CONFIRMATION, VultrError, VultrWorker, WorkerConfig
+from dapta.vultr import CONFIRMATION, VultrError, VultrWorker, WorkerConfig, _gpu_details
 
 
 COMMIT = "a" * 40
@@ -157,6 +157,12 @@ class VultrWorkerTests(unittest.TestCase):
         self.assertEqual(result["projected_max_cost_usd"], "3.424")
         self.assertFalse(result["will_provision"])
         self.assertIsNone(client.created)
+
+    def test_legacy_a16_plan_has_accurate_gpu_metadata(self):
+        self.assertEqual(
+            _gpu_details("vcg-a16-6c-60g-16vram", {"gpu_type": None, "gpu_count": None}),
+            ("NVIDIA A16", 1),
+        )
 
     def test_paid_run_requires_literal_confirmation_before_api_calls(self):
         client = FakeClient()
