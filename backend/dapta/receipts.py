@@ -319,6 +319,14 @@ def _sroie_train_split(key: str) -> str:
 def _number(value: Any) -> int | float | None:
     if value is None:
         return None
+    if isinstance(value, (list, tuple)):
+        parsed = [_number(item) for item in value]
+        parsed = [item for item in parsed if item is not None]
+        if not parsed:
+            return None
+        if any(item != parsed[0] for item in parsed[1:]):
+            raise ValueError(f"conflicting numeric receipt labels: {value}")
+        return parsed[0]
     text = re.sub(r"[^0-9,.-]", "", str(value).strip())
     if not text or text in {"-", ".", ","}:
         return None

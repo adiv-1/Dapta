@@ -51,7 +51,10 @@ class FakeLoader:
         annotation = {
             "gt_parse": {
                 "menu": [{"nm": "Lunch", "cnt": "1 x", "price": "75,000"}],
-                "sub_total": {"subtotal_price": "75,000", "tax_price": "7,500"},
+                "sub_total": {
+                    "subtotal_price": ["75,000", "75,000"],
+                    "tax_price": "7,500",
+                },
                 "total": {"total_price": "82,500"},
             },
             "meta": {"image_id": f"cord-{split}"},

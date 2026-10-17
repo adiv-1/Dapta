@@ -21,7 +21,7 @@ As of October 17, 2026:
   validation gate are implemented without downloading either dataset locally.
 - The budget-capped Vultr worker lifecycle is implemented and locally tested.
 - The local controller environment is installed with its lightweight dependency
-  set; all 38 backend tests pass.
+  set; all 39 backend tests pass.
 - The full receipt evaluator is implemented and reports accuracy, time, cost,
   tokens, schema failures, hallucinations, line-item F1, and arithmetic checks
   separately for every benchmark condition.
