@@ -74,8 +74,8 @@ class FakeRunner:
     def upload_environment(self, host, values):
         self.calls.append(("upload_environment", set(values)))
 
-    def prepare(self, host, job_id, *, limit, timeout):
-        self.calls.append(("prepare", limit))
+    def prepare(self, host, job_id, *, skill_id, limit, timeout):
+        self.calls.append(("prepare", skill_id, limit))
 
     def read_validation(self, host, job_id, *, timeout):
         self.calls.append("read_validation")
@@ -86,8 +86,8 @@ class FakeRunner:
             "hashes": {"splits": {"test": "abc"}},
         }
 
-    def train(self, host, job_id, version, *, timeout):
-        self.calls.append("train")
+    def train(self, host, job_id, version, *, skill_id, smoke, timeout):
+        self.calls.append(("train", skill_id, smoke))
         if self.fail_train:
             raise RuntimeError("training failed")
 

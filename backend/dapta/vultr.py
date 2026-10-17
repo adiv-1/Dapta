@@ -216,9 +216,32 @@ class SshRunner:
             check=True,
         )
 
-    def prepare(self, host: str, job_id: str, *, limit: int | None, timeout: int) -> None:
+    def prepare(
+        self,
+        host: str,
+        job_id: str,
+        *,
+        skill_id: str,
+        limit: int | None,
+        timeout: int,
+    ) -> None:
         job_id = _safe_value(job_id, "job_id")
+        skill_id = _skill_id(skill_id)
         limit_arg = f" --limit {limit}" if limit is not None else ""
+        if skill_id == "receipt-to-expense":
+            dataset_command = (
+                f"DAPTA_REMOTE_WORKER=1 PYTHONPATH=backend python -m dapta.receipts "
+                f"--job-dir /opt/dapta-jobs/{job_id}{limit_arg}\n"
+                f"PYTHONPATH=backend python -m dapta.validation "
+                f"--dataset /opt/dapta-jobs/{job_id}/receipt-dataset "
+                f"--report /opt/dapta-jobs/{job_id}/validation.json"
+            )
+        else:
+            dataset_command = (
+                f"DAPTA_REMOTE_WORKER=1 PYTHONPATH=backend python -m dapta.dashboards "
+                f"--job-dir /opt/dapta-jobs/{job_id}{limit_arg} "
+                f"--report /opt/dapta-jobs/{job_id}/validation.json"
+            )
         script = f"""set -euo pipefail
 cd /opt/dapta
 nvidia-smi
@@ -232,8 +255,7 @@ set -a
 . .env.worker
 set +a
 mkdir -p /opt/dapta-jobs/{job_id}
-DAPTA_REMOTE_WORKER=1 PYTHONPATH=backend python -m dapta.receipts --job-dir /opt/dapta-jobs/{job_id}{limit_arg}
-PYTHONPATH=backend python -m dapta.validation --dataset /opt/dapta-jobs/{job_id}/receipt-dataset --report /opt/dapta-jobs/{job_id}/validation.json
+{dataset_command}
 """
         self._run(host, script, timeout)
 
@@ -250,9 +272,22 @@ PYTHONPATH=backend python -m dapta.validation --dataset /opt/dapta-jobs/{job_id}
             raise ValueError("validation report is not a JSON object")
         return value
 
-    def train(self, host: str, job_id: str, version: str, *, timeout: int) -> None:
+    def train(
+        self,
+        host: str,
+        job_id: str,
+        version: str,
+        *,
+        skill_id: str,
+        smoke: bool,
+        timeout: int,
+    ) -> None:
         job_id = _safe_value(job_id, "job_id")
         version = _safe_value(version, "version")
+        skill_id = _skill_id(skill_id)
+        dataset_name = "receipt-dataset" if skill_id == "receipt-to-expense" else "dashboard-dataset"
+        contract = f"research/adapter-assets/skills/{skill_id}"
+        smoke_args = " --epochs 1 --max-steps 2 --smoke-inference" if smoke else ""
         script = f"""set -euo pipefail
 cd /opt/dapta
 . .venv/bin/activate
@@ -260,7 +295,7 @@ set -a
 . .env.worker
 set +a
 python -m pip install -r backend/requirements.txt
-PYTHONPATH=backend python -m dapta.train --dataset /opt/dapta-jobs/{job_id}/receipt-dataset --output /opt/dapta-jobs/{job_id}/adapters --skill receipt-to-expense --version {version}
+PYTHONPATH=backend python -m dapta.train --dataset /opt/dapta-jobs/{job_id}/{dataset_name} --output /opt/dapta-jobs/{job_id}/adapters --skill {skill_id} --version {version} --contract {contract}{smoke_args}
 """
         self._run(host, script, timeout)
 
@@ -307,13 +342,22 @@ class VultrWorker:
         self.sleep = sleep
         self.monotonic = monotonic
 
-    def plan(self, job_id: str, commit: str, *, limit: int | None) -> dict[str, Any]:
+    def plan(
+        self,
+        job_id: str,
+        commit: str,
+        *,
+        skill_id: str = "receipt-to-expense",
+        limit: int | None,
+    ) -> dict[str, Any]:
         job_id = _safe_value(job_id, "job_id")
         commit = _safe_commit(commit)
+        skill_id = _skill_id(skill_id)
         self.runner.verify_commit(commit)
         plan = self._preflight()
         return {
             "job_id": job_id,
+            "skill_id": skill_id,
             "commit": commit,
             "region": self.config.region,
             "plan_id": self.config.plan_id,
@@ -334,6 +378,8 @@ class VultrWorker:
         job_id: str,
         commit: str,
         version: str,
+        skill_id: str = "receipt-to-expense",
+        smoke: bool = False,
         limit: int | None,
         confirmation: str,
         validation_report_path: Path | None = None,
@@ -344,6 +390,7 @@ class VultrWorker:
         job_id = _safe_value(job_id, "job_id")
         commit = _safe_commit(commit)
         version = _safe_value(version, "version")
+        skill_id = _skill_id(skill_id)
         if limit is not None and limit < 1:
             raise ValueError("limit must be positive")
 
@@ -411,7 +458,13 @@ class VultrWorker:
             )
             self._event(allocation_id, "workload_started")
             try:
-                self.runner.prepare(host, job_id, limit=limit, timeout=self._remaining(deadline))
+                self.runner.prepare(
+                    host,
+                    job_id,
+                    skill_id=skill_id,
+                    limit=limit,
+                    timeout=self._remaining(deadline),
+                )
             except BaseException:
                 self._save_validation(host, job_id, validation_report_path, deadline, required=False)
                 raise
@@ -430,7 +483,14 @@ class VultrWorker:
                     "hashes": validation_report.get("hashes", {}),
                 },
             )
-            self.runner.train(host, job_id, version, timeout=self._remaining(deadline))
+            self.runner.train(
+                host,
+                job_id,
+                version,
+                skill_id=skill_id,
+                smoke=smoke,
+                timeout=self._remaining(deadline),
+            )
             self._event(allocation_id, "workload_finished")
             return {
                 "instance_id": instance_id,
@@ -586,6 +646,12 @@ def _safe_commit(value: str) -> str:
     return value
 
 
+def _skill_id(value: str) -> str:
+    if value not in {"receipt-to-expense", "csv-to-dashboard"}:
+        raise ValueError(f"unsupported skill: {value}")
+    return value
+
+
 def _env(name: str) -> str:
     value = os.environ.get(name, "").strip()
     if not value:
@@ -608,6 +674,12 @@ def main() -> None:
     parser.add_argument("--run-id")
     parser.add_argument("--commit", required=True)
     parser.add_argument("--version", default="v1-smoke")
+    parser.add_argument(
+        "--skill",
+        choices=("receipt-to-expense", "csv-to-dashboard"),
+        default="receipt-to-expense",
+    )
+    parser.add_argument("--smoke", action="store_true")
     parser.add_argument("--limit", type=int)
     parser.add_argument("--confirm-spend")
     parser.add_argument("--env", type=Path, default=Path(".env"))
@@ -622,7 +694,17 @@ def main() -> None:
     runner = SshRunner(config, Path.cwd())
     worker = VultrWorker(config, client, ledger, runner)
     if args.command == "plan":
-        print(json.dumps(worker.plan(args.job_id, args.commit, limit=args.limit), indent=2))
+        print(
+            json.dumps(
+                worker.plan(
+                    args.job_id,
+                    args.commit,
+                    skill_id=args.skill,
+                    limit=args.limit,
+                ),
+                indent=2,
+            )
+        )
         runner.close()
         return
 
@@ -631,7 +713,7 @@ def main() -> None:
         run_id=run_id,
         run_type="adapter_training",
         job_id=args.job_id,
-        skill_id="receipt-to-expense",
+        skill_id=args.skill,
         metadata={"code_commit": args.commit, "dataset_limit": args.limit},
     )
     with worker_lock():
@@ -640,6 +722,8 @@ def main() -> None:
             job_id=args.job_id,
             commit=args.commit,
             version=args.version,
+            skill_id=args.skill,
+            smoke=args.smoke,
             limit=args.limit,
             confirmation=args.confirm_spend or "",
             validation_report_path=args.artifacts / args.job_id / "validation.json",

@@ -113,8 +113,8 @@ def _validate_row(row: dict[str, Any], dataset_dir: Path, split: str, index: int
         raise ValueError(f"{split}:{index} has invalid id")
     if not isinstance(row["prompt"], str) or not row["prompt"].strip():
         raise ValueError(f"{split}:{index} has invalid prompt")
-    if not isinstance(row["images"], list) or not row["images"]:
-        raise ValueError(f"{split}:{index} must contain at least one image")
+    if not isinstance(row["images"], list):
+        raise ValueError(f"{split}:{index} images must be a list")
     for image in row["images"]:
         path = (dataset_dir / image).resolve()
         if dataset_dir not in path.parents or not path.is_file():

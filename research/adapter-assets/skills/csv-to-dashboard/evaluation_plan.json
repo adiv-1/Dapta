@@ -1,0 +1,14 @@
+{
+  "type": "deterministic_and_execution",
+  "model_based_judging": false,
+  "metrics": [
+    "output schema validity",
+    "cleaning code exits successfully in an isolated worker",
+    "cleaned CSV equals the frozen expected CSV",
+    "dashboard code exits successfully in an isolated worker",
+    "dashboard.html exists and is non-empty",
+    "requested source fields and chart type appear in the generated code"
+  ],
+  "test_set": "JetBrains-Research/PandasPlotBench test split at the pinned revision",
+  "test_policy": "Test rows are never used by the data builder or training worker."
+}
