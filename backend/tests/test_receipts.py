@@ -9,7 +9,11 @@ from unittest.mock import patch
 from PIL import Image
 
 from dapta.data import read_jsonl, validate_dataset
-from dapta.receipts import _deduplicate_cases, materialize_receipt_dataset
+from dapta.receipts import (
+    _deduplicate_cases,
+    _filter_inconsistent_cases,
+    materialize_receipt_dataset,
+)
 from dapta.validation import DatasetValidationError, require_valid_receipt_dataset
 
 
@@ -79,6 +83,34 @@ class FakeLoader:
 
 
 class ReceiptDatasetTests(unittest.TestCase):
+    def test_inconsistent_source_labels_are_excluded(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            image = root / "receipt.png"
+            Image.new("RGB", (64, 64), "white").save(image)
+            receipt = {
+                "subtotal": 100,
+                "tax": 10,
+                "service_charge": None,
+                "total": 95,
+                "line_items": [],
+            }
+            rows = {
+                "train": [{
+                    "images": [image.name],
+                    "completion": {"receipts": [receipt]},
+                    "metadata": {"source_id": "receipt-cord-v2"},
+                }],
+                "dev": [],
+                "test": [],
+            }
+
+            removed = _filter_inconsistent_cases(rows, root)
+
+            self.assertEqual(removed["train"]["scalar_arithmetic"], 1)
+            self.assertEqual(rows["train"], [])
+            self.assertFalse(image.exists())
+
     def test_deduplication_preserves_test_then_dev_then_train(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
@@ -131,6 +163,7 @@ class ReceiptDatasetTests(unittest.TestCase):
             self.assertGreater(counts["dev"], 1)
             self.assertEqual(counts["test"], 2)
             self.assertFalse((job_dir / "source-cache").exists())
+            self.assertTrue((job_dir / "validation.json").is_file())
             self.assertTrue(all(call[3] for call in loader.calls))
             self.assertEqual({call[2] for call in loader.calls}, {"train", "validation", "test"})
 

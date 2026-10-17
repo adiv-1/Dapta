@@ -15,7 +15,7 @@ from typing import Any, Callable, Iterable, Mapping
 from .data import REQUIRED_SPLITS, freeze_test, sha256, validate_dataset
 
 
-PREPROCESSING_VERSION = "receipt-cord-sroie-v2"
+PREPROCESSING_VERSION = "receipt-cord-sroie-v3"
 SYSTEM_PROMPT = "Extract visible receipt evidence and return only JSON matching the receipt expense schema."
 USER_PROMPT = "Convert this receipt image into the normalized expense report. Use null for absent fields."
 
@@ -135,6 +135,7 @@ def materialize_receipt_dataset(
                 _write_record(dataset_dir, sroie, "test", "test", row, record)
             )
 
+        filtered = _filter_inconsistent_cases(rows, dataset_dir)
         deduplicated = _deduplicate_cases(rows, dataset_dir)
         for split in REQUIRED_SPLITS:
             _write_jsonl(dataset_dir / f"{split}.jsonl", rows[split])
@@ -152,6 +153,7 @@ def materialize_receipt_dataset(
                 for source in sources.values()
             },
             "counts": counts,
+            "filtered_inconsistent_cases": filtered,
             "deduplicated_cases": deduplicated,
             "split_sha256": {
                 split: sha256(dataset_dir / f"{split}.jsonl") for split in REQUIRED_SPLITS
@@ -167,6 +169,7 @@ def materialize_receipt_dataset(
             dataset_dir,
             contract_dir=contract_dir,
             source_manifest=source_manifest,
+            report_path=job_dir / "validation.json",
         )
     except Exception:
         shutil.rmtree(dataset_dir, ignore_errors=True)
@@ -175,6 +178,40 @@ def materialize_receipt_dataset(
         shutil.rmtree(cache_dir, ignore_errors=True)
 
     return dataset_dir
+
+
+def _filter_inconsistent_cases(
+    rows: dict[str, list[dict[str, Any]]], dataset_dir: Path
+) -> dict[str, dict[str, int]]:
+    from .validation import receipt_arithmetic_differences
+
+    removed: dict[str, dict[str, int]] = {
+        split: {"scalar_arithmetic": 0, "line_item_arithmetic": 0}
+        for split in REQUIRED_SPLITS
+    }
+    tolerance = Decimal("0.02")
+    for split in REQUIRED_SPLITS:
+        accepted = []
+        for row in rows[split]:
+            receipt = row["completion"]["receipts"][0]
+            source_id = row.get("metadata", {}).get("source_id")
+            failures = [
+                check
+                for check, difference in receipt_arithmetic_differences(
+                    receipt,
+                    null_components_are_zero=source_id == "receipt-cord-v2",
+                ).items()
+                if difference > tolerance
+            ]
+            if not failures:
+                accepted.append(row)
+                continue
+            for check in failures:
+                removed[split][check] += 1
+            for relative in row.get("images", []):
+                (dataset_dir / relative).unlink(missing_ok=True)
+        rows[split] = accepted
+    return removed
 
 
 def _deduplicate_cases(
