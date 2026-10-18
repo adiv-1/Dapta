@@ -1,9 +1,13 @@
+import json
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from dapta.factory_runtime import (
     AgentDatasetSource,
     DevinIntegrator,
+    RunPodTrainingBackend,
     SavedEvaluation,
     training_allocation_id,
     training_instance_id,
@@ -11,6 +15,77 @@ from dapta.factory_runtime import (
 
 
 class FactoryRuntimeTests(unittest.TestCase):
+    def test_evaluation_worker_preserves_progress_stage_and_sentry_segments(self):
+        class Lifecycle:
+            def __init__(self):
+                self.actions = []
+
+            def unload(self):
+                self.actions.append("unload")
+
+            def load(self):
+                self.actions.append("load")
+
+        class Stage:
+            def __init__(self):
+                self.actions = []
+
+            def suspend(self, reason):
+                self.actions.append(("suspend", reason))
+
+            def resume(self, reason):
+                self.actions.append(("resume", reason))
+
+        class Process:
+            stdout = []
+
+            def terminate(self):
+                raise AssertionError("worker should not time out")
+
+            def wait(self):
+                return 0
+
+        class Timer:
+            daemon = False
+
+            def __init__(self, *_):
+                pass
+
+            def start(self):
+                pass
+
+            def cancel(self):
+                pass
+
+        lifecycle = Lifecycle()
+        telemetry = Stage()
+        progress = []
+        backend = RunPodTrainingBackend(ledger=None, lifecycle=lifecycle)
+        with tempfile.TemporaryDirectory() as directory:
+            result_path = Path(directory) / "result.json"
+            result_path.write_text(json.dumps({"evaluation_only": True}), encoding="utf-8")
+            with (
+                patch("dapta.factory_runtime.current_factory_stage", return_value=telemetry),
+                patch("dapta.factory_runtime.subprocess.Popen", return_value=Process()) as popen,
+                patch("dapta.factory_runtime.threading.Timer", Timer),
+            ):
+                result = backend._execute_gpu_worker(
+                    bundle_path=Path(directory) / "bundle.json",
+                    result_path=result_path,
+                    training_clock=0,
+                    on_progress=progress.append,
+                    evaluate_only=True,
+                )
+
+        self.assertTrue(result["evaluation_only"])
+        self.assertEqual(lifecycle.actions, ["unload", "load"])
+        self.assertEqual([item["stage"] for item in progress], ["evaluation", "evaluation"])
+        self.assertEqual(
+            telemetry.actions,
+            [("suspend", "gpu_evaluation"), ("resume", "gpu_worker_result")],
+        )
+        self.assertIn("--evaluate-only", popen.call_args.args[0])
+
     def test_devin_wait_suspends_the_stage_and_resumes_for_the_result(self):
         class Stage:
             active = None
@@ -138,6 +213,43 @@ class FactoryRuntimeTests(unittest.TestCase):
         self.assertFalse(result["repairable"])
         self.assertEqual(result["failure_reason"], "evaluation_output_truncated")
         self.assertIn("do not generate repair data", result["dev_feedback"]["instruction"])
+
+    def test_saved_evaluation_regenerates_truncated_outputs_without_training(self):
+        calls = []
+
+        def regenerate(**kwargs):
+            calls.append(kwargs)
+            return {
+                "conditions": {
+                    "base_with_skill": {"field_f1": 0.60},
+                    "lora_short_prompt": {"field_f1": 0.72, "schema_pass_rate": 0.95},
+                },
+                "evaluation_only": True,
+            }
+
+        evaluator = SavedEvaluation(regenerator=regenerate)
+        result = evaluator.evaluate(
+            job={"job_id": "job-1"},
+            round=2,
+            training={
+                "_source_round": 1,
+                "evaluation": {
+                    "conditions": {
+                        "lora_short_prompt": {
+                            "field_f1": 0.0,
+                            "schema_pass_rate": 0.0,
+                            "generation_max_new_tokens": 768,
+                            "truncated_cases": ["test-1"],
+                        },
+                    },
+                },
+            },
+        )
+
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0]["round"], 1)
+        self.assertTrue(result["passed"])
+        self.assertTrue(result["evaluation_only"])
 
 
 if __name__ == "__main__":

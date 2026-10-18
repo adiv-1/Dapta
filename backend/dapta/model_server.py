@@ -8,7 +8,7 @@ import re
 import threading
 import time
 from contextlib import asynccontextmanager
-from typing import Any
+from typing import Any, Optional
 
 from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
@@ -21,6 +21,47 @@ class GenerateRequest(BaseModel):
     workflow: str = Field(min_length=3, max_length=20_000)
     document_text: str = Field(min_length=1, max_length=500_000)
     adapter_id: str
+
+
+NDA_ADAPTER_ID = "nda-intake/qwen3-vl-8b-v1"
+NDA_SHORT_SYSTEM = (
+    "Complete the NDA intake form using the learned workflow. Return JSON only. "
+    "Use underscore-normalized strings; term must be a number_unit string, never a JSON number."
+)
+NDA_USER_INSTRUCTION = """Fill this NDA intake form.
+
+Return exactly:
+{
+  "effective_date": "YYYY-MM-DD or null",
+  "jurisdiction": "normalized_jurisdiction or null",
+  "parties": ["normalized_party_names"],
+  "term": "number_unit or null"
+}
+
+Replace spaces and colons inside extracted values with underscores. The term is a string such as
+"3_years", not the number 3.
+
+NDA:
+"""
+
+
+def generation_messages(request: GenerateRequest) -> list[dict[str, str]]:
+    """Build the inference prompt; the NDA path intentionally matches its frozen benchmark."""
+    if request.adapter_id == NDA_ADAPTER_ID:
+        return [
+            {"role": "system", "content": NDA_SHORT_SYSTEM},
+            {"role": "user", "content": NDA_USER_INSTRUCTION + request.document_text},
+        ]
+    return [
+        {
+            "role": "system",
+            "content": "Complete the requested learned workflow. Return valid JSON only.",
+        },
+        {
+            "role": "user",
+            "content": f"Workflow: {request.workflow}\n\nDocument:\n{request.document_text}",
+        },
+    ]
 
 
 class ModelRuntime:
@@ -98,16 +139,7 @@ class ModelRuntime:
 
         if self.model is None or self.processor is None:
             raise RuntimeError("model is not loaded")
-        messages = [
-            {
-                "role": "system",
-                "content": "Complete the requested learned workflow. Return valid JSON only.",
-            },
-            {
-                "role": "user",
-                "content": f"Workflow: {request.workflow}\n\nDocument:\n{request.document_text}",
-            },
-        ]
+        messages = generation_messages(request)
         with self.lock, torch.inference_mode():
             self.select_adapter(request.adapter_id)
             text = self.processor.apply_chat_template(
@@ -154,7 +186,7 @@ initialize_sentry(service="qwen-worker")
 app = FastAPI(title="Dapta Qwen Worker", lifespan=lifespan)
 
 
-def authorize(authorization: str | None = Header(default=None)) -> None:
+def authorize(authorization: Optional[str] = Header(default=None)) -> None:
     expected = os.environ.get("DAPTA_QWEN_TOKEN")
     if expected and authorization != f"Bearer {expected}":
         raise HTTPException(status_code=401, detail="unauthorized")

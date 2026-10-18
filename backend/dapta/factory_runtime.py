@@ -38,6 +38,10 @@ def training_instance_id(physical_instance_id: str, job_id: str, round: int) -> 
     return f"{physical_instance_id}:job-{job_id}:round-{round}"
 
 
+def evaluation_allocation_id(job_id: str, round: int) -> str:
+    return f"runpod:{job_id}:round-{round}:benchmark-repair-v1"
+
+
 class AgentDatasetSource:
     max_rounds = 3
 
@@ -373,6 +377,74 @@ class RunPodTrainingBackend:
         result["adapter_dir"] = str(output_dir.resolve())
         return result
 
+    def reevaluate(
+        self, *, job: Mapping[str, Any], round: int, training: Mapping[str, Any]
+    ) -> Mapping[str, Any]:
+        """Regenerate frozen benchmark outputs for saved weights without retraining."""
+        job_id = str(job["job_id"])
+        run_dir = self.work_dir / job_id / f"round-{round}" / "benchmark-repair"
+        run_dir.mkdir(parents=True, exist_ok=True)
+        bundle = {
+            "job_id": job_id,
+            "workflow": job["workflow"],
+            "skill_contract": {
+                name: self._artifact(job_id, name) for name in (
+                    "skill_spec", "output_schema", "evaluation_plan",
+                )
+            },
+            "dataset": self._artifact(job_id, "dataset", round=round),
+            "adapter_dir": str(training["adapter_dir"]),
+            "base_model": str(training["base_model"]),
+            "max_test_examples": int(os.environ.get("DAPTA_FACTORY_MAX_TEST_EXAMPLES", "12")),
+        }
+        bundle_path = run_dir / "bundle.json"
+        bundle_path.write_text(json.dumps(bundle, ensure_ascii=False), encoding="utf-8")
+        store = JobStore(os.environ.get("DAPTA_LEDGER_PATH", "artifacts/dapta.sqlite3"))
+        allocation_id = evaluation_allocation_id(job_id, round)
+        started = _now()
+        self.ledger.register_compute(
+            run_id=job_id,
+            allocation_id=allocation_id,
+            provider="runpod",
+            instance_id=training_instance_id(
+                os.environ.get("RUNPOD_POD_ID", "existing-pod"), job_id, round,
+            ) + ":benchmark-repair",
+            plan_id=os.environ.get("RUNPOD_GPU_PLAN", "RTX-A40-48GB"),
+            region=os.environ.get("RUNPOD_REGION", "CA-MTL-1"),
+            gpu_type=os.environ.get("RUNPOD_GPU_TYPE", "RTX A40"),
+            gpu_count=1,
+            hourly_cost_usd=self.hourly_cost,
+            pricing_source="runpod_console",
+            registered_at=started,
+            metadata={"billing_scope": "benchmark_only_repair", "training_skipped": True},
+        )
+        self.ledger.record_compute_event(allocation_id=allocation_id, event_type="workload_started")
+        clock = time.monotonic()
+        try:
+            report = self._execute_gpu_worker(
+                bundle_path=bundle_path,
+                result_path=run_dir / "result.json",
+                training_clock=clock,
+                on_progress=lambda item: store.record_progress(job_id, item),
+                evaluate_only=True,
+            )
+        finally:
+            completed = _now()
+            elapsed = Decimal(str((_parse(completed) - _parse(started)).total_seconds()))
+            cost = (elapsed / Decimal(3600) * self.hourly_cost).quantize(Decimal("0.000001"))
+            self.ledger.record_compute_event(allocation_id=allocation_id, event_type="workload_finished")
+            self.ledger.record_compute_cost(
+                allocation_id=allocation_id,
+                amount_usd=cost,
+                source="calculated",
+                period_start=started,
+                period_end=completed,
+                metadata={"billing_unit": "millisecond", "active_seconds": float(elapsed)},
+            )
+        report["evaluation_cost_usd"] = str(cost)
+        report["evaluation_only"] = True
+        return report
+
     def _execute_gpu_worker(
         self,
         *,
@@ -380,21 +452,26 @@ class RunPodTrainingBackend:
         result_path: Path,
         training_clock: float,
         on_progress: Any,
+        evaluate_only: bool = False,
     ) -> dict[str, Any]:
-        on_progress({"stage": "training", "message": "Unloading inference model"})
+        progress_stage = "evaluation" if evaluate_only else "training"
+        on_progress({"stage": progress_stage, "message": "Unloading inference model"})
         self.lifecycle.unload()
         try:
+            command = [sys.executable, "-m", "dapta.factory_gpu", "--bundle", str(bundle_path)]
+            if evaluate_only:
+                command.append("--evaluate-only")
             process = subprocess.Popen(
-                [sys.executable, "-m", "dapta.factory_gpu", "--bundle", str(bundle_path)],
+                command,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
                 bufsize=1,
                 env={**os.environ, "PYTHONUNBUFFERED": "1"},
             )
-            stage = current_factory_stage()
-            if stage is not None:
-                stage.suspend("gpu_training")
+            telemetry_stage = current_factory_stage()
+            if telemetry_stage is not None:
+                telemetry_stage.suspend("gpu_evaluation" if evaluate_only else "gpu_training")
             timed_out = threading.Event()
 
             def stop_over_budget() -> None:
@@ -436,23 +513,42 @@ class RunPodTrainingBackend:
                 raise RuntimeError("GPU worker did not write result.json")
             return json.loads(result_path.read_text(encoding="utf-8"))
         finally:
-            stage = current_factory_stage()
-            if stage is not None:
-                stage.resume("gpu_worker_result")
-            on_progress({"stage": "training", "message": "Reloading inference model"})
+            telemetry_stage = current_factory_stage()
+            if telemetry_stage is not None:
+                telemetry_stage.resume("gpu_worker_result")
+            on_progress({"stage": progress_stage, "message": "Reloading inference model"})
             self.lifecycle.load()
 
-    def _artifact(self, job_id: str, name: str) -> Any:
+    def _artifact(self, job_id: str, name: str, *, round: int = 1) -> Any:
         database = os.environ.get("DAPTA_LEDGER_PATH", "artifacts/dapta.sqlite3")
-        return JobStore(database).get_artifact(job_id, f"{name}.json")
+        path = f"{name}.json" if round == 1 else f"round-{round}/{name}.json"
+        return JobStore(database).get_artifact(job_id, path)
 
 
 class SavedEvaluation:
+    def __init__(self, regenerator: Any | None = None):
+        self.regenerator = regenerator
+
     def evaluate(
         self, *, job: Mapping[str, Any], round: int, training: Mapping[str, Any]
     ) -> Mapping[str, Any]:
-        del job, round
         report = dict(training["evaluation"])
+        existing_conditions = report.get("conditions") or {}
+        was_truncated = any(
+            isinstance(value, Mapping) and value.get("truncated_cases")
+            for value in existing_conditions.values()
+        )
+        previous_cap = max(
+            [int(value.get("generation_max_new_tokens", 0))
+             for value in existing_conditions.values() if isinstance(value, Mapping)] or [0]
+        )
+        configured_cap = int(os.environ.get("DAPTA_FACTORY_MAX_NEW_TOKENS", "4096"))
+        if was_truncated and self.regenerator is not None and configured_cap > previous_cap:
+            report = dict(self.regenerator(
+                job=job,
+                round=int(training.get("_source_round", round)),
+                training=training,
+            ))
         conditions = report.get("conditions") or {}
         base_skill = float(conditions.get("base_with_skill", {}).get("field_f1", 0))
         lora = float(conditions.get("lora_short_prompt", {}).get("field_f1", 0))

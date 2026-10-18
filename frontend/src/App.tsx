@@ -194,7 +194,10 @@ export default function App() {
               setTab("chat");
             }}
             onRetry={async (jobId) => {
-              const retried = await api.retryJob(jobId);
+              const current = jobs.find((item) => item.job_id === jobId);
+              const retried = current?.failure_code === "EvaluationOutputTruncated"
+                ? await api.repairEvaluation(jobId)
+                : await api.retryJob(jobId);
               setJobs((current) => current.map((item) => item.job_id === jobId ? retried : item));
             }}
           />

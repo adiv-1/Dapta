@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextvars
 import json
+import re
 import sqlite3
 import threading
 import time
@@ -14,6 +15,8 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from pathlib import Path
 from typing import Any, Callable, Iterator, Mapping
+
+from jsonschema import Draft202012Validator
 
 from .config import Settings
 from .ledger import UsageLedger
@@ -525,9 +528,17 @@ class ComparisonService:
         self, document_text: str, results: dict[str, Any], metadata: Mapping[str, Any]
     ) -> None:
         required_fields = list(metadata.get("required_fields") or [])
+        output_schema = metadata.get("output_schema")
+        validator = (
+            Draft202012Validator(output_schema)
+            if isinstance(output_schema, Mapping) and output_schema
+            else None
+        )
         for result in results.values():
             output = result.get("output")
             valid = isinstance(output, dict) and bool(output)
+            if valid and validator is not None:
+                valid = not any(validator.iter_errors(output))
             present = 0
             grounded = 0
             fields = required_fields or (list(output) if isinstance(output, dict) else [])
@@ -535,7 +546,7 @@ class ComparisonService:
                 value = output.get(field) if isinstance(output, dict) else None
                 if value not in (None, "", [], {}):
                     present += 1
-                    if str(value).lower() in document_text.lower():
+                    if _is_grounded(field, value, document_text):
                         grounded += 1
             completeness = present / len(fields) if fields else float(valid)
             grounding = grounded / present if present else 0.0
@@ -549,6 +560,53 @@ class ComparisonService:
                     "accuracy_label": "grounded evaluator score",
                 }
             )
+
+
+def _is_grounded(field: str, value: Any, document_text: str) -> bool:
+    """Check normalized extraction values against prose without changing model output."""
+    if isinstance(value, list):
+        return bool(value) and all(_is_grounded(field, item, document_text) for item in value)
+    if not isinstance(value, (str, int, float)):
+        return False
+
+    document = _searchable_text(document_text)
+    candidate = _searchable_text(str(value).replace("_", " ").replace(":", " "))
+    if candidate and candidate in document:
+        return True
+
+    if field == "effective_date" and isinstance(value, str):
+        try:
+            parsed = datetime.strptime(value, "%Y-%m-%d")
+        except ValueError:
+            pass
+        else:
+            variants = (
+                f"{parsed.strftime('%B')} {parsed.day} {parsed.year}",
+                f"{parsed.strftime('%b')} {parsed.day} {parsed.year}",
+                f"{parsed.day} {parsed.strftime('%B')} {parsed.year}",
+            )
+            return any(_searchable_text(item) in document for item in variants)
+
+    if field == "term" and isinstance(value, str):
+        match = re.fullmatch(r"(\d+)_(days?|months?|years?)", value.lower())
+        if match:
+            number, unit = match.groups()
+            words = {
+                "1": "one", "2": "two", "3": "three", "4": "four", "5": "five",
+                "6": "six", "7": "seven", "8": "eight", "9": "nine", "10": "ten",
+                "12": "twelve", "18": "eighteen", "24": "twenty four", "36": "thirty six",
+            }
+            forms = [number]
+            if number in words:
+                forms.append(words[number])
+            alternatives = "|".join(re.escape(item) for item in forms)
+            expression = rf"\b(?:{alternatives})(?:\s+\d+)?\s+{re.escape(unit)}\b"
+            return re.search(expression, document) is not None
+    return False
+
+
+def _searchable_text(value: str) -> str:
+    return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9]+", " ", value.lower())).strip()
 
 
 def _summarize(results: Mapping[str, Any]) -> dict[str, Any]:

@@ -18,3 +18,14 @@ Invite-only access is enforced by Base44 before the proxy forwards a request.
 Sentry Replay masks all text and blocks document media by default. Browser tracing and routine
 Replay sessions default to 5% sampling, while error Replays remain at 100%; all three rates are
 configurable with the `VITE_SENTRY_*_SAMPLE_RATE` variables shown in `.env.example`.
+
+The Skills & Adapters timeline is backed by persisted job events, not simulated
+progress. It shows a universal timer/cost until the terminal job state, plus
+per-stage elapsed time, cost, result, GPU telemetry, and ETA. The content area
+scrolls independently and keeps the previous render visible during refreshes to
+avoid a blank-screen state transition.
+
+`EvaluationOutputTruncated` is special: **Apply repair & rerun benchmark** calls
+`POST /v1/jobs/{id}/repair-evaluation`. It regenerates frozen benchmark outputs
+from saved weights and never rebuilds the dataset or retrains. Model-quality
+failures instead display suggested DEV-only repairs and require a user choice.

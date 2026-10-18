@@ -289,6 +289,75 @@ class JobTests(unittest.TestCase):
         self.assertIsNone(retried["failure_code"])
         self.assertEqual(retried["stage_attempts"][-1]["status"], "interrupted")
 
+    def test_truncated_evaluation_repair_skips_back_to_evaluator(self):
+        job = self.store.create_job(
+            workflow="Build a stable repeated reporting specialist.",
+            idempotency_key="repair-evaluation-001",
+        )
+        for status in (
+            "architecting", "integrating", "building_dataset", "validating",
+            "awaiting_compute", "provisioning_gpu", "training", "evaluating",
+        ):
+            self.store.transition(job["job_id"], status)
+        self.store.claim_stage(job["job_id"], "independent_evaluator")
+        self.store.complete_stage(
+            job["job_id"], "independent_evaluator", status="failed"
+        )
+        self.store.fail(
+            job["job_id"],
+            code="EvaluationOutputTruncated",
+            message="generation cap reached",
+        )
+
+        repaired = self.store.repair_truncated_evaluation(job["job_id"])
+
+        self.assertEqual(repaired["status"], "evaluating")
+        self.assertIsNone(repaired["failure_code"])
+        self.assertTrue(repaired["events"][-1]["metadata"]["benchmark_only_repair"])
+        self.assertTrue(repaired["events"][-1]["metadata"]["training_skipped"])
+        evaluator_attempt = next(
+            item for item in repaired["stage_attempts"]
+            if item["stage"] == "independent_evaluator"
+        )
+        self.assertEqual(evaluator_attempt["status"], "interrupted")
+
+    def test_truncated_evaluation_repair_reopens_the_latest_dataset_round(self):
+        job = self.store.create_job(
+            workflow="Build a stable repeated reporting specialist.",
+            idempotency_key="repair-evaluation-round-002",
+        )
+        for status in (
+            "architecting", "integrating", "building_dataset", "validating",
+            "awaiting_compute", "provisioning_gpu", "training", "evaluating",
+        ):
+            self.store.transition(job["job_id"], status)
+        self.store.claim_stage(job["job_id"], "independent_evaluator", round=1)
+        self.store.complete_stage(
+            job["job_id"], "independent_evaluator", status="completed", round=1,
+            next_status="building_dataset",
+        )
+        for status in (
+            "validating", "awaiting_compute", "provisioning_gpu", "training", "evaluating",
+        ):
+            self.store.transition(job["job_id"], status)
+        self.store.claim_stage(job["job_id"], "independent_evaluator", round=2)
+        self.store.complete_stage(
+            job["job_id"], "independent_evaluator", status="failed", round=2,
+        )
+        self.store.fail(
+            job["job_id"], code="EvaluationOutputTruncated", message="generation cap reached",
+        )
+
+        repaired = self.store.repair_truncated_evaluation(job["job_id"])
+
+        attempts = {
+            item["round"]: item["status"]
+            for item in repaired["stage_attempts"]
+            if item["stage"] == "independent_evaluator"
+        }
+        self.assertEqual(repaired["dataset_round"], 2)
+        self.assertEqual(attempts, {1: "completed", 2: "interrupted"})
+
 
 if __name__ == "__main__":
     unittest.main()

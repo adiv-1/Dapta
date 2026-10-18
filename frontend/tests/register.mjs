@@ -1,5 +1,5 @@
-// Lets Node load the Base44 Deno function (maps its npm:/base44: imports to local stubs) and the
-// React sources under src/ (TSX and Vite-style extensionless imports, compiled with Vite's esbuild).
+// Lets Node load the TypeScript test entries, React sources, and Base44 Deno function. The hook
+// maps Base44-only imports to local stubs and compiles project-owned TS/TSX with Vite's esbuild.
 import { existsSync, readFileSync } from "node:fs";
 import { registerHooks } from "node:module";
 import { fileURLToPath } from "node:url";
@@ -12,6 +12,8 @@ const stubs = {
 };
 const base44ClientStub = new URL("./stubs/base44-client.mjs", import.meta.url).href;
 const srcDir = new URL("../src/", import.meta.url).href;
+const testsDir = new URL("./", import.meta.url).href;
+const base44FunctionsDir = new URL("../base44/functions/", import.meta.url).href;
 
 registerHooks({
   resolve(specifier, context, nextResolve) {
@@ -27,7 +29,8 @@ registerHooks({
     return nextResolve(specifier, context);
   },
   load(url, context, nextLoad) {
-    if (url.startsWith(srcDir) && /\.tsx?$/.test(url)) {
+    if ((url.startsWith(srcDir) || url.startsWith(testsDir) || url.startsWith(base44FunctionsDir))
+        && /\.tsx?$/.test(url)) {
       const { code } = transformSync(readFileSync(fileURLToPath(url), "utf8"), {
         loader: url.endsWith(".tsx") ? "tsx" : "ts",
         format: "esm",

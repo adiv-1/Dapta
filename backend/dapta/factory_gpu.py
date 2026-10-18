@@ -53,13 +53,83 @@ def restore_frozen_compute_dtype(model: Any, torch: Any) -> list[str]:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--bundle", required=True)
+    parser.add_argument("--evaluate-only", action="store_true")
     args = parser.parse_args()
     bundle_path = Path(args.bundle)
     bundle = json.loads(bundle_path.read_text(encoding="utf-8"))
     result_path = bundle_path.parent / "result.json"
-    result = run(bundle)
+    result = evaluate_saved_adapter(bundle) if args.evaluate_only else run(bundle)
     result_path.write_text(json.dumps(result, indent=2, ensure_ascii=False), encoding="utf-8")
-    progress(stage="complete", message="Adapter training and evaluation complete", percent=100)
+    progress(
+        stage="complete",
+        message=(
+            "Saved adapter benchmark complete"
+            if args.evaluate_only
+            else "Adapter training and evaluation complete"
+        ),
+        percent=100,
+    )
+
+
+def evaluate_saved_adapter(bundle: Mapping[str, Any]) -> dict[str, Any]:
+    """Rerun only the frozen benchmark for an existing PEFT adapter."""
+    import torch
+    from peft import PeftModel
+    from transformers import AutoProcessor, BitsAndBytesConfig, Qwen3VLForConditionalGeneration
+
+    base_model = str(bundle["base_model"])
+    adapter_dir = Path(str(bundle["adapter_dir"]))
+    if not (adapter_dir / "adapter_model.safetensors").is_file():
+        raise RuntimeError(f"saved adapter weights are missing: {adapter_dir}")
+    test_cases = list(bundle["dataset"]["test"])[: int(bundle["max_test_examples"])]
+    skill = _skill_prompt(bundle["skill_contract"])
+    schema = bundle["skill_contract"].get("output_schema", {})
+    progress(stage="evaluation", message="Loading base model for benchmark-only repair", percent=2)
+    processor = AutoProcessor.from_pretrained(base_model)
+    processor.tokenizer.padding_side = "left"
+    if processor.tokenizer.pad_token_id is None:
+        processor.tokenizer.pad_token = processor.tokenizer.eos_token
+    quantization = BitsAndBytesConfig(
+        load_in_4bit=True,
+        bnb_4bit_quant_type="nf4",
+        bnb_4bit_compute_dtype=torch.bfloat16,
+        bnb_4bit_use_double_quant=True,
+    )
+    model = Qwen3VLForConditionalGeneration.from_pretrained(
+        base_model,
+        quantization_config=quantization,
+        device_map={"": 0},
+        torch_dtype=torch.bfloat16,
+        attn_implementation=os.environ.get("QWEN_ATTN_IMPLEMENTATION", "sdpa"),
+    )
+    model.eval()
+    base_no_skill = evaluate_condition(
+        model, processor, test_cases,
+        "Complete this workflow and return valid JSON only: " + str(bundle["workflow"]),
+        schema, condition="base_no_skill", progress_start=3, progress_end=28,
+    )
+    base_with_skill = evaluate_condition(
+        model, processor, test_cases, skill, schema,
+        condition="base_with_skill", progress_start=28, progress_end=53,
+    )
+    model = PeftModel.from_pretrained(model, str(adapter_dir), is_trainable=False)
+    model.eval()
+    lora_short = evaluate_condition(
+        model, processor, test_cases,
+        "Complete the learned workflow described here: "
+        + str(bundle["workflow"]) + ". Return JSON only.",
+        schema, condition="lora_short_prompt", progress_start=53, progress_end=97,
+    )
+    return {
+        "test_cases": len(test_cases),
+        "conditions": {
+            "base_no_skill": base_no_skill,
+            "base_with_skill": base_with_skill,
+            "lora_short_prompt": lora_short,
+        },
+        "evaluation_only": True,
+        "adapter_dir": str(adapter_dir),
+    }
 
 
 def run(bundle: Mapping[str, Any]) -> dict[str, Any]:
