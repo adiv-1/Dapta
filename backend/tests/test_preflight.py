@@ -8,6 +8,14 @@ from dapta.preflight import _sanitize, check_configuration, load_env
 
 
 class PreflightTests(unittest.TestCase):
+    def test_remote_runtime_dependencies_are_exactly_pinned(self):
+        root = Path(__file__).resolve().parents[2]
+        for name in ("requirements-data.txt", "requirements.txt"):
+            requirements = (root / "backend" / name).read_text(encoding="utf-8").splitlines()
+            for requirement in requirements:
+                if requirement and not requirement.startswith("#"):
+                    self.assertIn("==", requirement, f"unpinned dependency: {requirement}")
+
     def test_env_file_does_not_override_process_environment(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / ".env"

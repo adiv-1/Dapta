@@ -80,6 +80,30 @@ def train(
         json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
 
+    args = SFTConfig(
+        output_dir=str(adapter_dir / "checkpoints"),
+        num_train_epochs=epochs,
+        max_steps=max_steps if max_steps is not None else -1,
+        per_device_train_batch_size=1,
+        per_device_eval_batch_size=1,
+        gradient_accumulation_steps=8,
+        learning_rate=1e-4,
+        warmup_ratio=0.03,
+        lr_scheduler_type="cosine",
+        bf16=True,
+        fp16=False,
+        gradient_checkpointing=True,
+        completion_only_loss=True,
+        max_length=MAX_SEQUENCE_LENGTH,
+        packing=False,
+        eval_strategy="epoch",
+        save_strategy="epoch",
+        save_total_limit=1,
+        logging_steps=1,
+        report_to="none",
+        remove_unused_columns=False,
+        seed=42,
+    )
     processor = AutoProcessor.from_pretrained(
         MODEL_ID,
         revision=MODEL_REVISION,
@@ -118,30 +142,6 @@ def train(
         target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
         bias="none",
         task_type="CAUSAL_LM",
-    )
-    args = SFTConfig(
-        output_dir=str(adapter_dir / "checkpoints"),
-        num_train_epochs=epochs,
-        max_steps=max_steps if max_steps is not None else -1,
-        per_device_train_batch_size=1,
-        per_device_eval_batch_size=1,
-        gradient_accumulation_steps=8,
-        learning_rate=1e-4,
-        warmup_ratio=0.03,
-        lr_scheduler_type="cosine",
-        bf16=True,
-        fp16=False,
-        gradient_checkpointing=True,
-        completion_only_loss=True,
-        max_length=MAX_SEQUENCE_LENGTH,
-        packing=False,
-        eval_strategy="epoch",
-        save_strategy="epoch",
-        save_total_limit=1,
-        logging_steps=5,
-        report_to="none",
-        remove_unused_columns=False,
-        seed=42,
     )
     trainer = SFTTrainer(
         model=model,
