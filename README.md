@@ -20,11 +20,23 @@ As of October 17, 2026:
 - The pinned CORD v2 and SROIE remote dataset adapter and receipt-specific
   validation gate are implemented without downloading either dataset locally.
 - The budget-capped Vultr worker lifecycle is implemented and locally tested.
-- All 29 backend tests pass.
-- A live read-only Vultr plan check confirms the A40 remains available in `ewr`
-  at `$1.712/hour`; the two-hour software ceiling projects at `$3.424`.
+- The local controller environment is installed with its lightweight dependency
+  set; all 40 backend tests pass.
+- The full receipt evaluator is implemented and reports accuracy, time, cost,
+  tokens, schema failures, hallucinations, line-item F1, and arithmetic checks
+  separately for every benchmark condition.
+- The dashboard adapter pipeline is implemented with pinned nvBench training /
+  validation data, a frozen PandasPlotBench test set, and a pinned public
+  dashboard-skill reference. All source data remains remote-only.
+- A live read-only Vultr plan check confirms a one-GPU A16 is available in
+  `ewr` at `$0.471/hour`; the two-hour software ceiling projects at `$0.942`.
 - No Vultr GPU has been created, Qwen has not been downloaded, and no LoRA has
   been trained yet.
+- Two A40 smoke provisioning requests were rejected before allocation because
+  the account limit is below that plan's `$1,250/month` list price. The local
+  ledger confirms zero allocations and `$0` compute cost for both attempts.
+  The smoke worker now uses the deployable `$344/month` A16 fallback; A40
+  remains the preferred full-training worker if Vultr approves the increase.
 - Sentry, Devin, and ASI:One runtime integration remain for the hackathon.
 
 ## Demo promise
@@ -177,7 +189,7 @@ The real Kimi K3 Skill Architect generated:
 - `research/adapter-assets/skills/receipt-to-expense/output_schema.json`
 - `research/adapter-assets/skills/receipt-to-expense/evaluation_plan.json`
 
-`review.json` records the architect run, provider-reported usage/cost, canonical
+`review.json` records the architect run, provider-reported usage/cost, stable
 artifact hashes, and engineering review checks. The contract requires visible
 evidence only, nulls for absent fields, a closed JSON schema, and deterministic
 CORD/SROIE metrics. It explicitly forbids inferred currency, expense category,
@@ -240,7 +252,8 @@ Hugging Face.
 1. checks live plan availability and exact price;
 2. rejects a second Dapta-managed worker;
 3. enforces a `$5` per-job software limit and a two-hour wall-clock deadline;
-4. creates one A40 with no block storage only after `--confirm-spend PROVISION`;
+4. creates the configured GPU on its included local disk, with no separate
+   block-storage volume, only after `--confirm-spend PROVISION`;
 5. sends an exact Git commit over SSH, so the private GitHub token is never on
    the worker;
 6. sends only the Hugging Face credentials in a mode-`0600` worker env file;
@@ -255,19 +268,24 @@ billing, so deletion—not shutdown—is the terminal action. The `$5` check is 
 application guard, not a Vultr account-level hard cap; teardown failures are
 surfaced as terminal errors rather than hidden.
 
-### 9. Run the cloud smoke test — not started
+### 9. Run the cloud smoke test — A16 fallback ready
 
-After Steps 7 and 8:
+The A40 requires a pending account-limit increase, so the smoke worker uses one
+NVIDIA A16 with 16 GB VRAM. Qwen loads in 4-bit, image resolution is capped at
+the Qwen training project's 576-token profile, sequences are capped at 2,048,
+batch size remains one, and gradient checkpointing is enabled. The A16 costs
+`$0.471/hour`, or at most `$0.942` under the two-hour controller deadline.
 
 1. verify `nvidia-smi`;
 2. download Qwen3-VL-8B on the worker;
 3. run base inference on one receipt;
-4. train QLoRA on roughly 16–32 examples;
+4. train QLoRA for two optimizer steps on roughly 16–32 training examples;
 5. reload the adapter and run inference;
 6. upload the smoke adapter and manifest to Hugging Face; and
 7. delete the worker.
 
-The smoke test must pass before a full training run.
+The smoke test must pass before a full training run. A16 is the immediate
+fallback; A40 remains the full-run target if Vultr approves its limit in time.
 
 ### 10. Train the first receipt adapter — not started
 
@@ -276,7 +294,7 @@ Qwen QLoRA, save loss/hyperparameters/GPU telemetry, upload the adapter and
 reproducibility manifest, and delete the worker. The durable artifact is the
 small LoRA adapter, not a second copy of Qwen.
 
-### 11. Evaluate all conditions — not started
+### 11. Evaluate all conditions — evaluator complete; model runs pending
 
 The frozen examples and identical decoding settings will compare:
 
@@ -288,23 +306,35 @@ Claude + full Skill
 GPT + full Skill
 ```
 
-Code scores schema validity, SROIE field accuracy, CORD field/line-item
-accuracy, arithmetic, latency, TTFT, tokens, and cost. gpt-oss-120b reviews only
-qualities deterministic code cannot score.
+`backend/dapta/evaluate.py` validates the frozen test hash and scores schema
+validity, SROIE field accuracy, CORD field/line-item accuracy, exclusions,
+arithmetic, latency, tokens, and cost. It also emits the deterministic
+performance summary used by the UI. Model inference outputs are the remaining
+input. gpt-oss-120b will review only qualities deterministic code cannot score.
 
-### 12. Serve Qwen with adapters — not started
+### 12. Build the dashboard adapter pipeline — code complete
+
+`backend/dapta/dashboards.py` streams pinned sources only on a remote worker.
+nvBench's 25,750 text-to-visualization pairs supply training and validation,
+split by complete database IDs. PandasPlotBench's 175 examples are frozen as an
+independent test set and never enter training. Each training row contains a
+deterministically corrupted CSV, exact cleaned CSV, reversible pandas cleaning
+code, and Plotly dashboard code. The validator rejects split leakage, mutable
+source revisions, schema failures, and manifest/hash drift.
+
+### 13. Serve Qwen with adapters — not started
 
 The inference service will load base Qwen once, select the requested LoRA,
 accept one or more receipt images, stream strict JSON, and return measurement
 metadata. One GPU is sufficient for the hackathon inference demo.
 
-### 13. Build the frontend — wireframe complete, application not started
+### 14. Build the frontend — wireframe complete, application not started
 
 The agreed three-tab interaction and performance charts are preserved in
 `docs/wireframes/dapta-demo-wireframe.html` and `docs/UX_DEMO_SPEC.md`. The
 production frontend should begin while the first full training job is running.
 
-### 14. Add sponsor integrations — accounts partially ready
+### 15. Add sponsor integrations — accounts partially ready
 
 - **Sentry:** organization/trial created; SDK, Tracing, Logs, Session Replay,
   and AI monitoring are not connected yet.
@@ -319,12 +349,14 @@ work.
 
 ## Run the repository locally
 
-Create a virtual environment and install the backend requirements:
+Create a virtual environment and install the lightweight local controller
+requirements. Torch, bitsandbytes, and the training stack are installed only on
+the temporary GPU worker:
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r backend/requirements.txt
+pip install -r backend/requirements-controller.txt
 cp .env.example .env
 ```
 
@@ -357,7 +389,8 @@ and absence of an existing Dapta worker. This makes no cloud changes:
 PYTHONPATH=backend python -m dapta.vultr plan \
   --job-id receipt-smoke-001 \
   --commit "$(git rev-parse HEAD)" \
-  --limit 32
+  --skill receipt-to-expense \
+  --limit 16
 ```
 
 Only after reviewing that output, launch the paid Step 9 smoke run:
@@ -366,13 +399,16 @@ Only after reviewing that output, launch the paid Step 9 smoke run:
 PYTHONPATH=backend python -m dapta.vultr run \
   --job-id receipt-smoke-001 \
   --commit "$(git rev-parse HEAD)" \
+  --skill receipt-to-expense \
+  --smoke \
   --version v1-smoke \
-  --limit 32 \
+  --limit 16 \
   --confirm-spend PROVISION
 ```
 
-`--limit 32` means at most 32 rows from each upstream source split, not 32 rows
-in total. Omit it only for the later full run. The command saves the validation
+`--limit 16` yields roughly 16–32 receipt training examples after the two
+sources are combined; it also caps each upstream source split at 16 rows. Omit
+it only for the later full run. The command saves the validation
 report under `artifacts/jobs/`, uploads successful adapter artifacts to the
 configured Hugging Face repository, and always requests instance deletion.
 
@@ -395,13 +431,13 @@ runtime artifacts and must remain outside Git.
 ## Immediate next sequence
 
 ```text
-Review and run Step 9 guarded cloud smoke test
+Run Step 9 guarded cloud smoke test
   -> review cost and output
   -> start Step 10 full receipt training
   -> build frontend and sponsor integrations while training runs
 ```
 
-Steps 1–8 are complete on branch `initial-dapta`. No paid GPU was created while
-building them. The branch is ready for a teammate to review and run Step 9, but
-the first paid command should still be the limited smoke run above—not full
+Steps 1–8, the receipt evaluator, and the dashboard data/training pipeline are
+complete on branch `initial-dapta`. No paid GPU was created while building
+them. The first paid command must still be the limited smoke run above—not full
 training.

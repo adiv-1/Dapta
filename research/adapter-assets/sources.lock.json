@@ -30,6 +30,43 @@
       "retrieval": "ephemeral_vultr_cache"
     },
     {
+      "id": "dashboard-nvbench",
+      "workflow": "csv_to_dashboard",
+      "status": "ready",
+      "kind": "git_dataset",
+      "source": "https://github.com/TsinghuaDatabaseGroup/nvBench",
+      "revision": "544fbc218a2c2fd5dac7591371e3e01ccd6afb93",
+      "license": "MIT",
+      "splits": {"all": 25750},
+      "role": "training_and_validation_by_database_split",
+      "split_rule": "Hold out entire db_id values for validation using stable hash seed 20261017; never place one database in both splits.",
+      "retrieval": "download_pinned_json_on_vultr"
+    },
+    {
+      "id": "dashboard-pandasplotbench",
+      "workflow": "csv_to_dashboard",
+      "status": "ready",
+      "kind": "huggingface_dataset",
+      "source": "JetBrains-Research/PandasPlotBench",
+      "revision": "c3b2a1009135a5fe6c2bba169f102eac1feeee42",
+      "license": "Apache-2.0",
+      "splits": {"test": 175},
+      "role": "frozen_independent_test_only",
+      "retrieval": "stream_on_vultr"
+    },
+    {
+      "id": "dashboard-build-dashboard-skill",
+      "workflow": "csv_to_dashboard",
+      "status": "ready",
+      "kind": "git_skill",
+      "source": "https://github.com/anthropics/knowledge-work-plugins/blob/main/data/skills/build-dashboard/SKILL.md",
+      "revision": "33eeda1e8fd856455b05479d13a0f85b5f803744",
+      "license": "Apache-2.0",
+      "splits": {},
+      "role": "skill_reference",
+      "retrieval": "download_pinned_markdown_on_vultr"
+    },
+    {
       "id": "finance-sec-fsds",
       "workflow": "sec_filing_to_three_statement_model",
       "status": "ready",

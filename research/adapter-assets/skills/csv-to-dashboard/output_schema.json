@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "cleaning_code": {"type": "string", "minLength": 1},
+    "cleaned_csv": {"type": "string", "minLength": 1},
+    "dashboard_code": {"type": "string", "minLength": 1}
+  },
+  "required": ["cleaning_code", "cleaned_csv", "dashboard_code"]
+}

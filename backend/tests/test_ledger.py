@@ -173,7 +173,7 @@ class LedgerTests(unittest.TestCase):
         )
         self.ledger.estimate_destroyed_compute_cost("allocation-1")
 
-        self.assertEqual(self.ledger.run_summary("benchmark-1")["compute_cost_usd"], "2.568")
+        self.assertEqual(self.ledger.run_summary("benchmark-1")["compute_cost_usd"], "3.424")
 
         self.ledger.record_compute_cost(
             allocation_id="allocation-1",
@@ -185,6 +185,35 @@ class LedgerTests(unittest.TestCase):
             recorded_at="2026-10-17T03:00:00Z",
         )
         self.assertEqual(self.ledger.run_summary("benchmark-1")["compute_cost_usd"], "2.6")
+
+    def test_compute_cost_applies_vultr_one_hour_minimum(self):
+        self.ledger.register_compute(
+            run_id="benchmark-1",
+            allocation_id="allocation-short",
+            provider="vultr",
+            instance_id="instance-short",
+            plan_id="vcg-a16-6c-60g-16vram",
+            region="ewr",
+            gpu_type="NVIDIA A16",
+            gpu_count=1,
+            hourly_cost_usd="0.471",
+            pricing_source="vultr-plan-api",
+            registered_at=START,
+        )
+        self.ledger.record_compute_event(
+            allocation_id="allocation-short",
+            event_type="created",
+            occurred_at="2026-10-17T01:00:00Z",
+        )
+        self.ledger.record_compute_event(
+            allocation_id="allocation-short",
+            event_type="destroyed",
+            occurred_at="2026-10-17T01:03:36Z",
+        )
+
+        self.ledger.estimate_destroyed_compute_cost("allocation-short")
+
+        self.assertEqual(self.ledger.run_summary("benchmark-1")["compute_cost_usd"], "0.471")
 
     def test_money_uses_decimal_not_binary_float_arithmetic(self):
         for call_id, amount in (("a", Decimal("0.1")), ("b", Decimal("0.2"))):

@@ -9,7 +9,11 @@ from unittest.mock import patch
 from PIL import Image
 
 from dapta.data import read_jsonl, validate_dataset
-from dapta.receipts import materialize_receipt_dataset
+from dapta.receipts import (
+    _deduplicate_cases,
+    _filter_inconsistent_cases,
+    materialize_receipt_dataset,
+)
 from dapta.validation import DatasetValidationError, require_valid_receipt_dataset
 
 
@@ -51,7 +55,10 @@ class FakeLoader:
         annotation = {
             "gt_parse": {
                 "menu": [{"nm": "Lunch", "cnt": "1 x", "price": "75,000"}],
-                "sub_total": {"subtotal_price": "75,000", "tax_price": "7,500"},
+                "sub_total": {
+                    "subtotal_price": ["75,000", "75,000"],
+                    "tax_price": "7,500",
+                },
                 "total": {"total_price": "82,500"},
             },
             "meta": {"image_id": f"cord-{split}"},
@@ -76,6 +83,60 @@ class FakeLoader:
 
 
 class ReceiptDatasetTests(unittest.TestCase):
+    def test_inconsistent_source_labels_are_excluded(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            image = root / "receipt.png"
+            Image.new("RGB", (64, 64), "white").save(image)
+            receipt = {
+                "subtotal": 100,
+                "tax": 10,
+                "service_charge": None,
+                "total": 95,
+                "line_items": [],
+            }
+            rows = {
+                "train": [{
+                    "images": [image.name],
+                    "completion": {"receipts": [receipt]},
+                    "metadata": {"source_id": "receipt-cord-v2"},
+                }],
+                "dev": [],
+                "test": [],
+            }
+
+            removed = _filter_inconsistent_cases(rows, root)
+
+            self.assertEqual(removed["train"]["scalar_arithmetic"], 1)
+            self.assertEqual(rows["train"], [])
+            self.assertFalse(image.exists())
+
+    def test_deduplication_preserves_test_then_dev_then_train(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            image = root / "receipt.png"
+            Image.new("RGB", (64, 64), "white").save(image)
+
+            def row(case_id):
+                return {
+                    "id": case_id,
+                    "images": [image.name],
+                    "prompt": "Extract receipt",
+                    "completion": {},
+                }
+
+            rows = {
+                "train": [row("train")],
+                "dev": [row("dev")],
+                "test": [row("test")],
+            }
+
+            removed = _deduplicate_cases(rows, root)
+
+            self.assertEqual(removed, {"train": 1, "dev": 1, "test": 0})
+            self.assertEqual([item["id"] for item in rows["test"]], ["test"])
+            self.assertEqual(rows["train"], [])
+            self.assertEqual(rows["dev"], [])
     def test_remote_worker_guard_blocks_local_downloads(self):
         with tempfile.TemporaryDirectory() as temp:
             with patch.dict(os.environ, {}, clear=True):
@@ -102,6 +163,7 @@ class ReceiptDatasetTests(unittest.TestCase):
             self.assertGreater(counts["dev"], 1)
             self.assertEqual(counts["test"], 2)
             self.assertFalse((job_dir / "source-cache").exists())
+            self.assertTrue((job_dir / "validation.json").is_file())
             self.assertTrue(all(call[3] for call in loader.calls))
             self.assertEqual({call[2] for call in loader.calls}, {"train", "validation", "test"})
 

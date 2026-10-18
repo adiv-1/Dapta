@@ -5,7 +5,7 @@ import sqlite3
 import uuid
 from contextlib import contextmanager
 from datetime import datetime, timezone
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from decimal import Decimal, InvalidOperation, ROUND_CEILING, ROUND_HALF_UP
 from pathlib import Path
 from typing import Any, Iterator, Mapping
 
@@ -446,8 +446,12 @@ class UsageLedger:
         end = max(ends)
         seconds = Decimal(str((_parse_timestamp(end) - _parse_timestamp(start)).total_seconds()))
         hourly = Decimal(allocation["hourly_cost_usd"])
-        amount = hourly * seconds / Decimal(3600)
-        cost_id = f"calculated:{allocation_id}:{end}"
+        billable_hours = max(
+            1,
+            int((seconds / Decimal(3600)).to_integral_value(rounding=ROUND_CEILING)),
+        )
+        amount = hourly * billable_hours
+        cost_id = f"calculated-hourly-v2:{allocation_id}:{end}"
         return self.record_compute_cost(
             allocation_id=allocation_id,
             amount_usd=amount,
@@ -455,7 +459,11 @@ class UsageLedger:
             period_start=start,
             period_end=end,
             cost_id=cost_id,
-            metadata={"billable_seconds": int(seconds)},
+            metadata={
+                "actual_lifetime_seconds": int(seconds),
+                "billable_hours": billable_hours,
+                "billing_unit": "hour",
+            },
         )
 
     def run_summary(self, run_id: str) -> dict[str, Any]:

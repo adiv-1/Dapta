@@ -237,7 +237,32 @@ def _check_arithmetic(
     *,
     null_components_are_zero: bool,
 ) -> None:
-    tolerance = Decimal("0.02")
+    scalars = [receipt.get(name) for name in ("subtotal", "tax", "service_charge", "total")]
+    for check, difference in receipt_arithmetic_differences(
+        receipt,
+        null_components_are_zero=null_components_are_zero,
+    ).items():
+        checked[check] += 1
+        if difference > Decimal("0.02"):
+            message = (
+                f"subtotal + tax + service differs by {difference}"
+                if check == "scalar_arithmetic"
+                else f"line item sum differs by {difference}"
+            )
+            error(check, location, message)
+
+    if any(_finite_number(value) and Decimal(str(value)) < 0 for value in scalars):
+        warnings.append({
+            "check": "negative_amount",
+            "location": location,
+            "message": "negative receipt amount retained for possible returns or refunds",
+        })
+
+
+def receipt_arithmetic_differences(
+    receipt: dict[str, Any], *, null_components_are_zero: bool
+) -> dict[str, Decimal]:
+    differences: dict[str, Decimal] = {}
     scalars = [receipt.get(name) for name in ("subtotal", "tax", "service_charge", "total")]
     scalar_checkable = all(_finite_number(value) for value in scalars)
     if null_components_are_zero:
@@ -247,30 +272,21 @@ def _check_arithmetic(
             and all(value is None or _finite_number(value) for value in scalars[1:3])
         )
     if scalar_checkable:
-        checked["scalar_arithmetic"] += 1
         subtotal, tax, service, total = (
             Decimal(0) if value is None else Decimal(str(value)) for value in scalars
         )
-        difference = abs(subtotal + tax + service - total)
-        if difference > tolerance:
-            error("scalar_arithmetic", location, f"subtotal + tax + service differs by {difference}")
+        differences["scalar_arithmetic"] = abs(subtotal + tax + service - total)
 
     items = receipt.get("line_items")
     subtotal = receipt.get("subtotal")
     if isinstance(items, list) and items and _finite_number(subtotal):
         amounts = [item.get("amount") for item in items if isinstance(item, dict)]
         if len(amounts) == len(items) and all(_finite_number(value) for value in amounts):
-            checked["line_item_arithmetic"] += 1
-            difference = abs(sum((Decimal(str(value)) for value in amounts), Decimal()) - Decimal(str(subtotal)))
-            if difference > tolerance:
-                error("line_item_arithmetic", location, f"line item sum differs by {difference}")
-
-    if any(_finite_number(value) and Decimal(str(value)) < 0 for value in scalars):
-        warnings.append({
-            "check": "negative_amount",
-            "location": location,
-            "message": "negative receipt amount retained for possible returns or refunds",
-        })
+            differences["line_item_arithmetic"] = abs(
+                sum((Decimal(str(value)) for value in amounts), Decimal())
+                - Decimal(str(subtotal))
+            )
+    return differences
 
 
 def _finite_number(value: Any) -> bool:

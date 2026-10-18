@@ -49,6 +49,19 @@ class DatasetTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "duplicate id"):
             validate_dataset(root)
 
+    def test_text_only_dataset_can_have_no_images(self):
+        root = self.make_dataset()
+        for split in ("train", "dev", "test"):
+            path = root / f"{split}.jsonl"
+            row = json.loads(path.read_text(encoding="utf-8"))
+            row["images"] = []
+            path.write_text(json.dumps(row) + "\n", encoding="utf-8")
+        freeze_test(root)
+        self.assertEqual(validate_dataset(root), {"train": 1, "dev": 1, "test": 1})
+        row = to_training_rows(root, "train")[0]
+        self.assertEqual(row["images"], [])
+        self.assertEqual(row["prompt"][-1]["content"], [{"type": "text", "text": "Build the train expense report."}])
+
 
 if __name__ == "__main__":
     unittest.main()

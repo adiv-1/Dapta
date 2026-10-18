@@ -13,6 +13,7 @@ from dapta.vultr import (
     VultrError,
     VultrWorker,
     WorkerConfig,
+    _gpu_details,
     destroy_managed,
     managed_status,
 )
@@ -22,8 +23,9 @@ COMMIT = "a" * 40
 
 
 class FakeClient:
-    def __init__(self, *, active=None):
+    def __init__(self, *, active=None, fail_delete=False):
         self.active = active or []
+        self.fail_delete = fail_delete
         self.created = None
         self.deleted = False
 
@@ -61,6 +63,8 @@ class FakeClient:
         }
 
     def delete_instance(self, instance_id):
+        if self.fail_delete:
+            raise RuntimeError("deletion failed")
         self.deleted = True
 
 
@@ -82,8 +86,8 @@ class FakeRunner:
     def upload_environment(self, host, values):
         self.calls.append(("upload_environment", set(values)))
 
-    def prepare(self, host, job_id, *, limit, timeout):
-        self.calls.append(("prepare", limit))
+    def prepare(self, host, job_id, *, skill_id, limit, timeout):
+        self.calls.append(("prepare", skill_id, limit))
 
     def read_validation(self, host, job_id, *, timeout):
         self.calls.append("read_validation")
@@ -94,8 +98,8 @@ class FakeRunner:
             "hashes": {"splits": {"test": "abc"}},
         }
 
-    def train(self, host, job_id, version, *, timeout):
-        self.calls.append("train")
+    def train(self, host, job_id, version, *, skill_id, smoke, timeout):
+        self.calls.append(("train", skill_id, smoke))
         if self.fail_train:
             raise RuntimeError("training failed")
 
@@ -163,6 +167,12 @@ class VultrWorkerTests(unittest.TestCase):
         self.assertFalse(result["will_provision"])
         self.assertIsNone(client.created)
 
+    def test_legacy_a16_plan_has_accurate_gpu_metadata(self):
+        self.assertEqual(
+            _gpu_details("vcg-a16-6c-60g-16vram", {"gpu_type": None, "gpu_count": None}),
+            ("NVIDIA A16", 1),
+        )
+
     def test_paid_run_requires_literal_confirmation_before_api_calls(self):
         client = FakeClient()
         with self.assertRaisesRegex(ValueError, "confirm-spend"):
@@ -196,7 +206,7 @@ class VultrWorkerTests(unittest.TestCase):
         self.assertEqual(result["status"], "completed")
         self.assertTrue(client.deleted)
         self.assertTrue(runner.closed)
-        self.assertEqual(client.created["block_devices"], [])
+        self.assertNotIn("block_devices", client.created)
         self.assertEqual(client.created["sshkey_id"], ["ssh-key-1"])
         with sqlite3.connect(self.ledger.path) as connection:
             events = {
@@ -206,6 +216,13 @@ class VultrWorkerTests(unittest.TestCase):
                 )
             }
             cost_count = connection.execute("SELECT COUNT(*) FROM compute_costs").fetchone()[0]
+            run_statuses = [
+                row[0]
+                for row in connection.execute(
+                    "SELECT status FROM run_events "
+                    "WHERE run_id = 'run-1' AND stage = 'vultr_worker' ORDER BY occurred_at"
+                )
+            ]
         self.assertEqual(
             events,
             {
@@ -219,6 +236,7 @@ class VultrWorkerTests(unittest.TestCase):
             },
         )
         self.assertEqual(cost_count, 1)
+        self.assertEqual(run_statuses, ["started", "completed"])
 
     @patch.dict(
         os.environ,
@@ -242,7 +260,37 @@ class VultrWorkerTests(unittest.TestCase):
             failures = connection.execute(
                 "SELECT COUNT(*) FROM compute_events WHERE event_type = 'failed'"
             ).fetchone()[0]
+            run_failures = connection.execute(
+                "SELECT COUNT(*) FROM run_events WHERE status = 'failed'"
+            ).fetchone()[0]
         self.assertEqual(failures, 1)
+        self.assertEqual(run_failures, 1)
+
+    @patch.dict(
+        os.environ,
+        {"HF_TOKEN": "hf-secret", "HF_ADAPTER_REPO": "owner/adapters"},
+        clear=True,
+    )
+    def test_deletion_failure_never_marks_run_completed(self):
+        client = FakeClient(fail_delete=True)
+        with self.assertRaisesRegex(RuntimeError, "deletion failed"):
+            self.worker(client, FakeRunner()).run(
+                run_id="run-1",
+                job_id="job-1",
+                commit=COMMIT,
+                version="v1-smoke",
+                limit=32,
+                confirmation=CONFIRMATION,
+            )
+        with sqlite3.connect(self.ledger.path) as connection:
+            statuses = [
+                row[0]
+                for row in connection.execute(
+                    "SELECT status FROM run_events "
+                    "WHERE run_id = 'run-1' AND stage = 'vultr_worker' ORDER BY occurred_at"
+                )
+            ]
+        self.assertEqual(statuses, ["started", "failed"])
 
     @patch.dict(
         os.environ,
@@ -443,8 +491,17 @@ class VultrWorkerTests(unittest.TestCase):
         runner = SshRunner(self.config, Path(self.temp.name))
         runner._run = lambda host, script, timeout: scripts.append(script)
         try:
-            runner.prepare("8.8.8.8", "job-1", limit=8, timeout=60)
-            runner.train("8.8.8.8", "job-1", "v1-smoke", timeout=60)
+            runner.prepare(
+                "8.8.8.8", "job-1", skill_id="receipt-to-expense", limit=8, timeout=60
+            )
+            runner.train(
+                "8.8.8.8",
+                "job-1",
+                "v1-smoke",
+                skill_id="receipt-to-expense",
+                smoke=False,
+                timeout=60,
+            )
         finally:
             runner.close()
         prepare, train = scripts
