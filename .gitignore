@@ -156,6 +156,8 @@ activemq-data/
 .env.*.local
 .envrc
 .venv
+node_modules/
+frontend/base44/.app.jsonc
 env/
 venv/
 ENV/

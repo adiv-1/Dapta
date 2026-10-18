@@ -42,6 +42,30 @@ class ApiTests(unittest.TestCase):
                 self.assertEqual(client.get("/benchmarks").json(), [])
                 self.assertEqual(client.post("/compare").status_code, 501)
 
+    def test_v1_seed_registry_auth_and_agent_tools(self):
+        with tempfile.TemporaryDirectory() as directory:
+            database = Path(directory) / "dapta.sqlite3"
+            environment = {
+                "DAPTA_LEDGER_PATH": str(database),
+                "DAPTA_CONTROL_TOKEN": "controller-test-token",
+                "DAPTA_SEED_DEMO_DATA": "true",
+            }
+            with patch.dict(os.environ, environment, clear=False):
+                from dapta.api import create_app
+
+                client = TestClient(create_app(database))
+                self.assertEqual(client.get("/v1/adapters").status_code, 401)
+                headers = {"X-Dapta-Token": "controller-test-token"}
+                adapters = client.get("/v1/adapters", headers=headers).json()
+                self.assertEqual(adapters[0]["adapter_id"], "nda-intake/qwen3-vl-8b-v1")
+                benchmarks = client.get("/v1/benchmarks", headers=headers).json()
+                self.assertEqual(benchmarks[0]["test_documents"], 83)
+                tools = client.get("/v1/agent/tools", headers=headers).json()
+                self.assertEqual(
+                    {tool["name"] for tool in tools},
+                    {"list_adapters", "run_comparison", "create_adapter", "get_job_status"},
+                )
+
 
 if __name__ == "__main__":
     unittest.main()

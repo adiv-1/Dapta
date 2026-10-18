@@ -1,0 +1,42 @@
+services:
+  controller:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.controller
+    env_file: ../.env
+    environment:
+      DAPTA_QWEN_URL: http://model-worker:8001
+      DAPTA_LEDGER_PATH: /app/artifacts/dapta.sqlite3
+    ports:
+      - "8000:8000"
+    volumes:
+      - dapta-ledger:/app/artifacts
+    depends_on:
+      model-worker:
+        condition: service_healthy
+    restart: unless-stopped
+
+  model-worker:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.worker
+    env_file: ../.env
+    expose:
+      - "8001"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 30
+      start_period: 10m
+    restart: unless-stopped
+
+volumes:
+  dapta-ledger:

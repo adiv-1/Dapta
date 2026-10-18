@@ -90,31 +90,35 @@ class OpenRouterClient:
         temperature: float = 0,
         benchmark_case_id: str | None = None,
         condition: str | None = None,
+        reasoning_effort: str | None = None,
     ) -> dict[str, Any]:
         call_id = str(uuid.uuid4())
         started_at = _now()
         started_clock = time.monotonic()
         response: dict[str, Any] | None = None
         try:
+            payload: dict[str, Any] = {
+                "model": model,
+                "messages": messages,
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+                "response_format": {"type": "json_object"},
+                "usage": {"include": True},
+                "user": run_id,
+                "trace": {
+                    "trace_id": run_id,
+                    "trace_name": "dapta.adapter_build",
+                    "span_name": f"gen_ai.{agent_role}",
+                    "generation_name": agent_role,
+                },
+            }
+            if reasoning_effort:
+                payload["reasoning"] = {"effort": reasoning_effort}
             response = self.transport.request(
                 "POST",
                 f"{self.base_url}/chat/completions",
                 headers=self._headers(),
-                payload={
-                    "model": model,
-                    "messages": messages,
-                    "temperature": temperature,
-                    "max_tokens": max_tokens,
-                    "response_format": {"type": "json_object"},
-                    "usage": {"include": True},
-                    "user": run_id,
-                    "trace": {
-                        "trace_id": run_id,
-                        "trace_name": "dapta.adapter_build",
-                        "span_name": f"gen_ai.{agent_role}",
-                        "generation_name": agent_role,
-                    },
-                },
+                payload=payload,
             )
             completed_at = _now()
             duration_ms = round((time.monotonic() - started_clock) * 1000)
@@ -132,7 +136,10 @@ class OpenRouterClient:
                 duration_ms=duration_ms,
                 response=response,
                 generation=generation,
-                metadata={"generation_reconciled": reconciled},
+                metadata={
+                    "generation_reconciled": reconciled,
+                    "reasoning_effort": reasoning_effort,
+                },
             )
             return _response_json(response)
         except Exception as error:

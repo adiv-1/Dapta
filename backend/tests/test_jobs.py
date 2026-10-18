@@ -82,7 +82,7 @@ class JobTests(unittest.TestCase):
         candidates = self.store.get_artifact(job["job_id"], "dataset_candidates.json")
         self.assertEqual(set(candidates), {"train", "dev", "test", "ood"})
 
-        for stage in ("provisioning_gpu", "training", "evaluating"):
+        for stage in ("awaiting_compute", "provisioning_gpu", "training", "evaluating"):
             job = self.store.transition(job["job_id"], stage)
         job = self.orchestrator.evaluate(
             job["job_id"], deterministic_report={"exact_match": 0.95}

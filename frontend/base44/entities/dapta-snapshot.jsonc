@@ -1,0 +1,19 @@
+{
+  "name": "DaptaSnapshot",
+  "description": "Durable UI snapshot mirrored from the Dapta controller",
+  "type": "object",
+  "properties": {
+    "external_id": { "type": "string" },
+    "kind": { "type": "string", "enum": ["run", "job", "adapter", "benchmark"] },
+    "status": { "type": "string" },
+    "payload_json": { "type": "string" },
+    "source_updated_at": { "type": "string", "format": "date-time" }
+  },
+  "required": ["external_id", "kind", "payload_json", "source_updated_at"],
+  "rls": {
+    "create": false,
+    "read": false,
+    "update": false,
+    "delete": false
+  }
+}

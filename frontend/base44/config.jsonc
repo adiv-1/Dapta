@@ -1,0 +1,10 @@
+{
+  "name": "Dapta",
+  "visibility": "private",
+  "site": {
+    "installCommand": "npm install",
+    "buildCommand": "npm run build",
+    "serveCommand": "npm run dev",
+    "outputDirectory": "./dist"
+  }
+}
