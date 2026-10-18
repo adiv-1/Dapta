@@ -152,6 +152,8 @@ activemq-data/
 
 # Environments
 .env
+.runpod_dapta_ed25519
+.runpod_dapta_ed25519.pub
 .env.local
 .env.*.local
 .envrc
