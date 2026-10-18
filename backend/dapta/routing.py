@@ -78,7 +78,7 @@ class WorkflowRouter:
                 },
                 {
                     "role": "user",
-                    "content": json.dumps({"workflow": workflow, "adapters": adapter_list}),
+                    "content": json.dumps({"workflow": workflow, "adapters": adapters}),
                 },
             ],
             "temperature": 0,
@@ -149,7 +149,7 @@ class WorkflowRouter:
                 "existing_adapter", best[1], best[0], best[2], fingerprint, "registry_fallback", True
             )
         return RouteDecision(
-            "create_adapter", None, max(0.0, 1 - best[0]), best[2], fingerprint, "registry_fallback", True
+            "create_adapter", None, max(0.0, 1 - best[0]), "No registered adapter met the match threshold", fingerprint, "registry_fallback", True
         )
 
 
