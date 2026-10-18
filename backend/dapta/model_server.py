@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import hashlib
+import gc
 import os
 import re
 import threading
@@ -32,19 +33,33 @@ class ModelRuntime:
         import torch
         from transformers import AutoProcessor, Qwen3VLForConditionalGeneration
 
-        model_id = os.environ.get("QWEN_BASE_MODEL", "Qwen/Qwen3-VL-8B-Instruct")
-        self.processor = AutoProcessor.from_pretrained(model_id)
-        base = Qwen3VLForConditionalGeneration.from_pretrained(
-            model_id,
-            torch_dtype=torch.bfloat16,
-            device_map="cuda",
-            attn_implementation=os.environ.get("QWEN_ATTN_IMPLEMENTATION", "sdpa"),
-        )
-        self.model = base
-        self.model.eval()
-        default_adapter = os.environ.get("QWEN_ADAPTER_SUBFOLDER")
-        if self.adapter_repo and default_adapter:
-            self.select_adapter(default_adapter)
+        with self.lock:
+            if self.model is not None:
+                return
+            model_id = os.environ.get("QWEN_BASE_MODEL", "Qwen/Qwen3-VL-8B-Instruct")
+            self.processor = AutoProcessor.from_pretrained(model_id)
+            base = Qwen3VLForConditionalGeneration.from_pretrained(
+                model_id,
+                torch_dtype=torch.bfloat16,
+                device_map="cuda",
+                attn_implementation=os.environ.get("QWEN_ATTN_IMPLEMENTATION", "sdpa"),
+            )
+            self.model = base
+            self.model.eval()
+            self.loaded_adapters = {}
+            default_adapter = os.environ.get("QWEN_ADAPTER_SUBFOLDER")
+            if self.adapter_repo and default_adapter:
+                self.select_adapter(default_adapter)
+
+    def unload(self) -> None:
+        import torch
+
+        with self.lock:
+            self.model = None
+            self.processor = None
+            self.loaded_adapters = {}
+            gc.collect()
+            torch.cuda.empty_cache()
 
     def select_adapter(self, adapter_id: str) -> None:
         if not self.adapter_repo:
@@ -152,3 +167,15 @@ def health() -> dict[str, Any]:
 @app.post("/generate", dependencies=[Depends(authorize)])
 def generate(request: GenerateRequest) -> dict[str, Any]:
     return runtime.generate(request)
+
+
+@app.post("/admin/unload", dependencies=[Depends(authorize)])
+def unload() -> dict[str, Any]:
+    runtime.unload()
+    return {"status": "ok", "model_loaded": False}
+
+
+@app.post("/admin/load", dependencies=[Depends(authorize)])
+def load() -> dict[str, Any]:
+    runtime.load()
+    return {"status": "ok", "model_loaded": True}

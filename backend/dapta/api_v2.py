@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import time
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Optional
 
@@ -15,16 +16,34 @@ from pydantic import BaseModel, Field
 from .comparisons import TERMINAL_RUN_STATES, ComparisonNotFound, ComparisonService, ComparisonStore, QwenGateway
 from .config import Settings
 from .devin import DevinClient, DevinError
-from .jobs import AdapterJobOrchestrator, InvalidTransition, JobConflict, JobNotFound, JobStore
+from .factory_runtime import (
+    AgentDatasetSource,
+    DevinIntegrator,
+    FactoryRunner,
+    HuggingFacePublisher,
+    QwenLifecycle,
+    RunPodTrainingBackend,
+    SavedEvaluation,
+)
+from .jobs import (
+    AdapterJobOrchestrator,
+    InvalidTransition,
+    JobBlocked,
+    JobConflict,
+    JobNotFound,
+    JobStore,
+)
 from .ledger import UsageLedger
-from .observability import initialize_sentry, span
+from .observability import capture_exception, initialize_sentry, span
 from .openrouter import FactoryAgents, OpenRouterClient
 from .routing import WorkflowRouter
+from .supabase_store import SupabaseFactoryStore
 
 
 class CreateJobRequest(BaseModel):
     workflow: str = Field(min_length=10, max_length=20_000)
     skill_id: Optional[str] = Field(default=None, max_length=200)
+    route: Optional[dict[str, Any]] = None
 
 
 class RouteRequest(BaseModel):
@@ -51,7 +70,6 @@ def create_app(database_path: Path | str | None = None) -> FastAPI:
     ledger = UsageLedger(path)
     comparison_store = ComparisonStore(path)
     agents = _factory_agents(ledger)
-    orchestrator = AdapterJobOrchestrator(store, ledger, agents)
     openrouter = _openrouter(ledger)
     qwen = QwenGateway(url=settings.qwen_url, token=settings.qwen_api_token) if settings.qwen_url else None
     comparison_service = ComparisonService(
@@ -63,7 +81,44 @@ def create_app(database_path: Path | str | None = None) -> FastAPI:
     )
     router = WorkflowRouter()
     devin = _devin_client()
-    app = FastAPI(title="Dapta", version="0.2.0")
+    training_enabled = os.environ.get("DAPTA_FACTORY_TRAINING_ENABLED", "false").lower() in {
+        "1", "true", "yes",
+    }
+    lifecycle = (
+        QwenLifecycle(settings.qwen_url, settings.qwen_api_token)
+        if settings.qwen_url and training_enabled
+        else None
+    )
+    trainer = RunPodTrainingBackend(ledger, lifecycle) if lifecycle else None
+    hf_token = os.environ.get("HF_TOKEN")
+    hf_repo = os.environ.get("HF_ADAPTER_REPO")
+    publisher = HuggingFacePublisher(hf_repo, hf_token) if hf_token and hf_repo else None
+    orchestrator = AdapterJobOrchestrator(
+        store,
+        ledger,
+        agents,
+        integrator=DevinIntegrator(devin, store) if devin else None,
+        dataset_source=AgentDatasetSource(agents) if agents else None,
+        trainer=trainer,
+        evaluator=SavedEvaluation(),
+        publisher=publisher,
+    )
+    supabase = _supabase_store()
+    runner = FactoryRunner(orchestrator, store, mirror=supabase)
+    @asynccontextmanager
+    async def lifespan(application: FastAPI):
+        del application
+        if os.environ.get("DAPTA_FACTORY_AUTOSTART", "false").lower() in {
+            "1", "true", "yes",
+        }:
+            runner.start()
+        try:
+            yield
+        finally:
+            runner.stop()
+
+    app = FastAPI(title="Dapta", version="0.3.0", lifespan=lifespan)
+    app.state.factory_runner = runner
     app.add_middleware(
         CORSMiddleware,
         allow_origins=_allowed_origins(),
@@ -88,6 +143,10 @@ def create_app(database_path: Path | str | None = None) -> FastAPI:
             "qwen_configured": qwen is not None,
             "openrouter_configured": openrouter is not None,
             "devin_configured": devin is not None,
+            "factory_autostart": bool(runner.thread and runner.thread.is_alive()),
+            "training_configured": trainer is not None,
+            "publishing_configured": publisher is not None,
+            "supabase_configured": supabase is not None,
         }
 
     @app.post("/v1/route", dependencies=protected)
@@ -190,7 +249,7 @@ def create_app(database_path: Path | str | None = None) -> FastAPI:
                 workflow=str(arguments.get("workflow") or ""),
                 skill_id=arguments.get("skill_id"),
             )
-            return _create_job(orchestrator, payload, key)
+            return _create_job(orchestrator, payload, key, runner)
         if tool_name == "run_comparison":
             key = request.idempotency_key or str(arguments.get("idempotency_key") or "")
             if len(key) < 8:
@@ -214,7 +273,7 @@ def create_app(database_path: Path | str | None = None) -> FastAPI:
         request: CreateJobRequest,
         idempotency_key: str = Header(alias="Idempotency-Key", min_length=8, max_length=200),
     ) -> dict[str, Any]:
-        return _create_job(orchestrator, request, idempotency_key)
+        return _create_job(orchestrator, request, idempotency_key, runner)
 
     @app.get("/v1/jobs", dependencies=protected)
     def list_v1_jobs(limit: int = 100) -> list[dict[str, Any]]:
@@ -224,20 +283,33 @@ def create_app(database_path: Path | str | None = None) -> FastAPI:
     def get_v1_job(job_id: str) -> dict[str, Any]:
         return _get_job(store, job_id)
 
+    @app.get("/v1/jobs/{job_id}/events", dependencies=protected)
+    def stream_job(job_id: str) -> StreamingResponse:
+        try:
+            store.get_job(job_id)
+        except JobNotFound as error:
+            raise HTTPException(status_code=404, detail="job not found") from error
+
+        def events():
+            last_sequence = 0
+            while True:
+                current = store.get_job(job_id)
+                for event in current["events"]:
+                    if event["sequence"] > last_sequence:
+                        last_sequence = event["sequence"]
+                        yield f"id: {last_sequence}\nevent: progress\ndata: {json.dumps(event)}\n\n"
+                if current["status"] in {"ready", "failed"}:
+                    yield f"event: complete\ndata: {json.dumps({'status': current['status']})}\n\n"
+                    break
+                time.sleep(1)
+
+        return StreamingResponse(events(), media_type="text/event-stream")
+
     @app.post("/v1/jobs/{job_id}/advance", dependencies=protected)
     def advance_job(job_id: str) -> dict[str, Any]:
         try:
-            job = store.get_job(job_id)
-            if job["status"] == "queued":
-                return orchestrator.architect(job_id)
-            if job["status"] == "building_dataset":
-                return orchestrator.build_dataset(job_id)
-            if job["status"] == "validating":
-                report = _validate_candidates(store.get_artifact(job_id, "dataset_candidates.json"))
-                store.put_artifact(job_id, "validation_report.json", report)
-                return store.transition(job_id, "awaiting_compute", metadata=report)
-            raise InvalidTransition(f"automatic advance is unavailable from {job['status']}")
-        except (JobNotFound, InvalidTransition, JobConflict, RuntimeError, ValueError) as error:
+            return orchestrator.advance(job_id)
+        except (JobNotFound, InvalidTransition, JobBlocked, JobConflict, RuntimeError, ValueError) as error:
             raise HTTPException(status_code=409, detail=str(error)) from error
 
     @app.post("/v1/jobs/{job_id}/devin", status_code=202, dependencies=protected)
@@ -259,7 +331,7 @@ def create_app(database_path: Path | str | None = None) -> FastAPI:
                     skill_contract=contract,
                     repository_url=os.environ.get("DAPTA_REPOSITORY_URL", "https://github.com/adiv-1/Dapta"),
                 )
-            store.put_artifact(job_id, "devin_session.json", session.__dict__)
+            store.set_artifact(job_id, "devin_session.json", session.__dict__)
             return {"job": store.get_job(job_id), "devin": session.__dict__}
         except (JobNotFound, InvalidTransition, JobConflict, DevinError) as error:
             raise HTTPException(status_code=409, detail=str(error)) from error
@@ -272,7 +344,7 @@ def create_app(database_path: Path | str | None = None) -> FastAPI:
             saved = store.get_artifact(job_id, "devin_session.json")
             session = devin.get_session(saved["session_id"])
             if session.status in {"finished", "completed"} and session.pull_request_url:
-                store.put_artifact(job_id, "devin_result.json", session.__dict__)
+                store.set_artifact(job_id, "devin_result.json", session.__dict__)
                 job = orchestrator.complete_integration(
                     job_id,
                     commit_sha=session.pull_request_url,
@@ -323,9 +395,22 @@ def _add_compatibility_routes(
         raise HTTPException(status_code=501, detail="use POST /v1/comparisons")
 
 
-def _create_job(orchestrator: AdapterJobOrchestrator, request: CreateJobRequest, key: str) -> dict[str, Any]:
+def _create_job(
+    orchestrator: AdapterJobOrchestrator,
+    request: CreateJobRequest,
+    key: str,
+    runner: FactoryRunner | None = None,
+) -> dict[str, Any]:
     try:
-        return orchestrator.create_job(workflow=request.workflow, skill_id=request.skill_id, idempotency_key=key)
+        job = orchestrator.create_job(
+            workflow=request.workflow,
+            skill_id=request.skill_id,
+            idempotency_key=key,
+            route_decision=request.route,
+        )
+        if runner:
+            runner.wake()
+        return job
     except JobConflict as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
 
@@ -361,6 +446,14 @@ def _devin_client() -> DevinClient | None:
     if not (os.environ.get("DEVIN_ORGANIZATION_ID") or os.environ.get("DEVIN_ORG_ID")):
         return None
     return DevinClient.from_env()
+
+
+def _supabase_store() -> SupabaseFactoryStore | None:
+    try:
+        return SupabaseFactoryStore.from_env()
+    except Exception as error:
+        capture_exception(error, stage="supabase_initialize")
+        return None
 
 
 def _allowed_origins() -> list[str]:
@@ -492,7 +585,7 @@ def _agent_tool_catalog() -> list[dict[str, Any]]:
         },
         {
             "name": "create_adapter",
-            "description": "Create an adapter factory job; validated jobs pause at awaiting_compute.",
+            "description": "Create and run a measured adapter factory job through publishing.",
             "input_schema": {
                 "type": "object",
                 "required": ["workflow", "idempotency_key"],

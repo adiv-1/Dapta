@@ -1,4 +1,4 @@
-import type { Adapter, Benchmark, Job, Run } from "./types";
+import type { Adapter, Benchmark, Job, RouteDecision, Run } from "./types";
 import { base44 } from "./base44Client";
 
 const API_URL = import.meta.env.VITE_DAPTA_API_URL;
@@ -73,7 +73,7 @@ export const api = {
     });
   },
   route: (workflow: string) =>
-    request<{ decision: string; adapter_id: string | null; confidence: number; reason: string }>(
+    request<RouteDecision>(
       "/v1/route",
       { method: "POST", body: JSON.stringify({ workflow }) },
     ),
@@ -88,10 +88,10 @@ export const api = {
         attachment_name: attachmentName,
       }),
     }),
-  createJob: (workflow: string) =>
+  createJob: (workflow: string, route: RouteDecision) =>
     request<Job>("/v1/jobs", {
       method: "POST",
       headers: { "Idempotency-Key": crypto.randomUUID() },
-      body: JSON.stringify({ workflow }),
+      body: JSON.stringify({ workflow, route }),
     }),
 };

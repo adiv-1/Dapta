@@ -52,6 +52,7 @@ class DevinClient:
             "the contract below. Do not edit frozen test labels or quality thresholds. "
             "Run the tests and open a reviewable pull request.\n\n"
             f"Job: {job_id}\nWorkflow: {workflow}\nRepository: {repository_url}\n"
+            f"Target branch: {os.environ.get('DAPTA_REPOSITORY_BRANCH', 'initial-dapta')}\n"
             f"Contract: {json.dumps(dict(skill_contract), ensure_ascii=False)}"
         )
         payload = self._request(

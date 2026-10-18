@@ -73,3 +73,25 @@ def span(op: str, name: str, **attributes: Any) -> Iterator[Any]:
             if key.lower() not in SENSITIVE_KEYS and value is not None:
                 active.set_data(key, value)
         yield active
+
+
+@contextmanager
+def root_transaction(name: str, **attributes: Any) -> Iterator[Any]:
+    if sentry_sdk is None or not os.environ.get("SENTRY_DSN"):
+        yield None
+        return
+    with sentry_sdk.start_transaction(op="ai.pipeline", name=name) as transaction:
+        for key, value in attributes.items():
+            if key.lower() not in SENSITIVE_KEYS and value is not None:
+                transaction.set_data(f"dapta.{key}", value)
+        yield transaction
+
+
+def capture_exception(error: Exception, **attributes: Any) -> None:
+    if sentry_sdk is None or not os.environ.get("SENTRY_DSN"):
+        return
+    with sentry_sdk.push_scope() as scope:
+        for key, value in attributes.items():
+            if key.lower() not in SENSITIVE_KEYS and value is not None:
+                scope.set_tag(f"dapta.{key}", str(value)[:200])
+        sentry_sdk.capture_exception(error)

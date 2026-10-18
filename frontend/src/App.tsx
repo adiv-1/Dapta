@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Activity, ArrowUp, Check, Clock3, FileText, Layers3, Loader2, Plus, Sparkles, Upload } from "lucide-react";
+import {
+  Activity, ArrowUp, BarChart3, BrainCircuit, Check, Clock3, Cpu,
+  Database, FileText, GitPullRequest, Layers3, Loader2, Plus, Router,
+  ShieldCheck, Sparkles, Upload, UploadCloud, X,
+} from "lucide-react";
 import { api } from "./api";
 import type { Adapter, Benchmark, Condition, Job, Run } from "./types";
 
@@ -21,6 +25,7 @@ export default function App() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [selectedRun, setSelectedRun] = useState<string>();
   const [selectedBenchmark, setSelectedBenchmark] = useState<string>();
+  const [selectedJob, setSelectedJob] = useState<string>();
   const [prompt, setPrompt] = useState("Extract the NDA into a normalized legal intake form.");
   const [documentText, setDocumentText] = useState("");
   const [fileName, setFileName] = useState<string>();
@@ -38,16 +43,18 @@ export default function App() {
     setJobs(nextJobs);
     setSelectedRun((current) => current || nextRuns[0]?.run_id);
     setSelectedBenchmark((current) => current || nextBenchmarks[0]?.benchmark_id);
+    setSelectedJob((current) => current || nextJobs[0]?.job_id);
   };
 
   useEffect(() => { refresh().catch((reason) => setError(reason.message)); }, []);
 
   useEffect(() => {
-    const active = runs.some((run) => !["completed", "failed"].includes(run.status));
+    const active = runs.some((run) => !["completed", "failed"].includes(run.status))
+      || jobs.some((job) => !["ready", "failed"].includes(job.status));
     if (!active) return;
     const timer = window.setInterval(() => refresh().catch(() => undefined), 1500);
     return () => window.clearInterval(timer);
-  }, [runs]);
+  }, [runs, jobs]);
 
   const currentRun = runs.find((run) => run.run_id === selectedRun);
   const currentBenchmark = benchmarks.find((item) => item.benchmark_id === selectedBenchmark);
@@ -73,13 +80,23 @@ export default function App() {
     setError(undefined);
     try {
       const route = await api.route(prompt);
-      if (route.decision === "existing_adapter" && route.adapter_id && documentText.trim()) {
+      if (route.decision === "unsupported") {
+        throw new Error(route.reason || "This workflow is not supported.");
+      }
+      if (route.decision === "existing_adapter" && route.adapter_id) {
+        if (!documentText.trim()) {
+          throw new Error("Paste or upload a document before running this adapter.");
+        }
+        if (route.requires_confirmation && !window.confirm(
+          `Use the matched adapter ${route.adapter_id}?\n\n${route.reason}`,
+        )) return;
         const run = await api.compare(prompt, documentText, route.adapter_id, fileName);
         setRuns((current) => [run, ...current]);
         setSelectedRun(run.run_id);
       } else {
-        const job = await api.createJob(prompt);
+        const job = await api.createJob(prompt, route);
         setJobs((current) => [job, ...current]);
+        setSelectedJob(job.job_id);
         setTab("skills");
       }
     } catch (reason) {
@@ -118,7 +135,15 @@ export default function App() {
             benchmark={currentBenchmark}
           />
         )}
-        {tab === "skills" && <Registry adapters={adapters} jobs={jobs} onTest={() => setTab("chat")} />}
+        {tab === "skills" && (
+          <Registry
+            adapters={adapters}
+            jobs={jobs}
+            selectedJob={selectedJob}
+            setSelectedJob={setSelectedJob}
+            onTest={() => setTab("chat")}
+          />
+        )}
       </main>
     </div>
   );
@@ -196,9 +221,84 @@ function MetricChart({ title, suffix, lower, conditions, field }: { title: strin
   return <article className="chart"><div className="chart-head"><h3>{title}</h3><span>{lower ? "Lower is better" : "Higher is better"}</span></div>{conditions.map((item) => <div className="bar-row" key={item.name}><div><strong>{item.label}</strong><span>{field === "cost" ? "$" : ""}{formatMetric(item[field], field)}{field === "cost" ? "" : suffix}</span></div><div className="track"><span className={item.name} style={{ width: `${Math.max(3, item[field] / max * 100)}%` }} /></div></div>)}</article>;
 }
 
-function Registry({ adapters, jobs, onTest }: { adapters: Adapter[]; jobs: Job[]; onTest: () => void }) {
-  const stages = ["queued", "architecting", "integrating", "building_dataset", "validating", "awaiting_compute", "provisioning_gpu", "training", "evaluating", "publishing", "ready"];
-  return <section className="page"><div className="page-title"><span><Layers3 size={18} /> Factory</span><h1>Skills & Adapters</h1><p>Every specialist is versioned, measured, and recoverable from its registry artifact.</p></div><div className="registry-grid">{adapters.map((adapter) => <article className="adapter-card" key={adapter.adapter_id}><div className="adapter-icon"><FileText /></div><span className="ready"><span />Ready</span><h2>{String(adapter.metadata.name || adapter.skill_id)}</h2><p>{String(adapter.metadata.description || "Reusable LoRA adapter")}</p><dl><div><dt>Base model</dt><dd>{adapter.base_model.split("/").pop()}</dd></div><div><dt>Accuracy</dt><dd>{Number(adapter.metadata.benchmark_accuracy || 0) * 100}%</dd></div><div><dt>Version</dt><dd>{adapter.version}</dd></div></dl><button onClick={onTest}>Test adapter</button></article>)}{jobs.map((job) => { const index = stages.indexOf(job.status); const progress = Math.max(4, index / (stages.length - 1) * 100); return <article className="adapter-card building" key={job.job_id}><div className="adapter-icon"><Loader2 className="spin" /></div><span className="building-pill">Factory active</span><h2>{job.skill_id || "New specialist"}</h2><p>{job.workflow}</p><div className="progress"><span style={{ width: `${progress}%` }} /></div><div className="stage"><span>{stageLabel(job.status)}</span><strong>{Math.round(progress)}%</strong></div></article>; })}<button className="new-card" onClick={onTest}><Plus /><span>Create a new specialist</span></button></div></section>;
+const factoryStages = [
+  { key: "queued", label: "JEV Router", detail: "Adapter match and trainability", icon: Router },
+  { key: "architecting", label: "Kimi K3 — Skill Architect", detail: "Skill spec, schema, evaluation plan", icon: BrainCircuit },
+  { key: "integrating", label: "Devin — Skill Integration", detail: "SKILL.md, validators, tests, PR evidence", icon: GitPullRequest },
+  { key: "building_dataset", label: "Kimi K3 — Data Builder", detail: "TRAIN, DEV, frozen TEST, OOD", icon: Database },
+  { key: "validating", label: "Dataset Validator", detail: "Schema, leakage, duplicates, hashes", icon: ShieldCheck },
+  { key: "awaiting_compute", label: "Compute Gate", detail: "Budget and GPU readiness", icon: Clock3 },
+  { key: "training", label: "RunPod A40 — QLoRA", detail: "Training, GPU telemetry, cost", icon: Cpu },
+  { key: "evaluating", label: "Independent Evaluator", detail: "Base vs Skill vs LoRA", icon: BarChart3 },
+  { key: "publishing", label: "Hugging Face Registry", detail: "Weights, metrics, manifest", icon: UploadCloud },
+] as const;
+
+function Registry({ adapters, jobs, selectedJob, setSelectedJob, onTest }: {
+  adapters: Adapter[]; jobs: Job[]; selectedJob?: string;
+  setSelectedJob: (id: string) => void; onTest: () => void;
+}) {
+  const job = jobs.find((item) => item.job_id === selectedJob) || jobs[0];
+  return (
+    <section className="page">
+      <div className="page-title"><span><Layers3 size={18} /> Factory</span><h1>Skills & Adapters</h1><p>Watch the factory make each decision, train the specialist, and preserve its evidence.</p></div>
+      {jobs.length > 0 && (
+        <div className="job-pills">
+          {jobs.map((item) => <button key={item.job_id} className={job?.job_id === item.job_id ? "active" : ""} onClick={() => setSelectedJob(item.job_id)}>{item.skill_id || "New specialist"}<small>{stageLabel(item.status)}</small></button>)}
+        </div>
+      )}
+      {job && <FactoryTimeline job={job} />}
+      <div className="registry-heading"><div><h2>Adapter registry</h2><p>Ready specialists restored from Hugging Face.</p></div><button onClick={onTest}><Plus size={16} />New specialist</button></div>
+      <div className="registry-grid">
+        {adapters.map((adapter) => <article className="adapter-card" key={adapter.adapter_id}><div className="adapter-icon"><FileText /></div><span className="ready"><span />Ready</span><h2>{String(adapter.metadata.name || adapter.skill_id)}</h2><p>{String(adapter.metadata.description || "Reusable LoRA adapter")}</p><dl><div><dt>Base model</dt><dd>{adapter.base_model.split("/").pop()}</dd></div><div><dt>Field F1</dt><dd>{(Number(adapter.metadata.benchmark_accuracy || 0) * 100).toFixed(1)}%</dd></div><div><dt>Version</dt><dd>{adapter.version}</dd></div></dl><button onClick={onTest}>Test adapter</button></article>)}
+        {!adapters.length && <button className="new-card" onClick={onTest}><Plus /><span>Create a new specialist</span></button>}
+      </div>
+    </section>
+  );
+}
+
+function FactoryTimeline({ job }: { job: Job }) {
+  const backendOrder = ["queued", "architecting", "integrating", "building_dataset", "validating", "awaiting_compute", "provisioning_gpu", "training", "evaluating", "publishing", "ready"];
+  const failedFrom = [...(job.events || [])].reverse().find((event) => event.to_status === "failed")?.from_status;
+  const effectiveStatus = job.status === "failed" ? failedFrom || "queued" : job.status;
+  const current = Math.max(0, backendOrder.indexOf(effectiveStatus));
+  const progress = job.progress;
+  const overall = job.status === "ready" ? 100 : Math.max(4, current / (backendOrder.length - 1) * 100);
+  return (
+    <article className={`factory-panel ${job.status}`}>
+      <div className="factory-head"><div><span className="factory-state">{job.status === "ready" ? <Check size={14} /> : job.status === "failed" ? <X size={14} /> : <Loader2 className="spin" size={14} />}{stageLabel(job.status)}</span><h2>{job.skill_id || "New LoRA specialist"}</h2><p>{job.workflow}</p></div><div className="factory-percent"><strong>{Math.round(overall)}%</strong><span>Round {job.dataset_round || 1}</span></div></div>
+      <div className="factory-progress"><span style={{ width: `${overall}%` }} /></div>
+      <div className="pipeline">
+        {factoryStages.map((stage) => {
+          const stageBackendIndex = backendOrder.indexOf(stage.key);
+          const completed = job.status === "ready"
+            || (stage.key === "queued" && Boolean(job.route))
+            || current > stageBackendIndex;
+          const active = !completed && (
+            stage.key === job.status
+            || (stage.key === "training" && job.status === "provisioning_gpu")
+          );
+          const failed = job.status === "failed" && (
+            stage.key === effectiveStatus
+            || (stage.key === "training" && effectiveStatus === "provisioning_gpu")
+          );
+          const Icon = stage.icon;
+          return <div className={`pipeline-step ${completed ? "complete" : active ? "active" : failed ? "failed" : "pending"}`} key={stage.key}><div className="pipeline-icon">{completed ? <Check /> : failed ? <X /> : active ? <Loader2 className="spin" /> : <Icon />}</div><div><strong>{stage.label}</strong><span>{stage.detail}</span>{stage.key === "queued" && job.route && <small>{job.route.decision} · {Math.round(job.route.confidence * 100)}% · {job.route.reason}</small>}{stage.key === "integrating" && job.devin_session && <small>{job.devin_session.status}{job.devin_session.pull_request_url ? " · PR ready" : ""}</small>}{stage.key === "validating" && job.validation && <small>Frozen TEST: {String(job.validation.frozen_test_sha256 || "pending").slice(0, 14)}…</small>}{stage.key === "training" && active && progress && <TrainingTelemetry progress={progress} />}{stage.key === "publishing" && job.publish_result && <a href={job.publish_result.artifact_uri.replace("hf://", "https://huggingface.co/")} target="_blank" rel="noreferrer">Open adapter ↗</a>}</div></div>;
+        })}
+      </div>
+      {job.failure_message && <div className="factory-error"><strong>{job.failure_code}</strong>{job.failure_message}</div>}
+      {job.deterministic_evaluation?.conditions && <FactoryResults evaluation={job.deterministic_evaluation} />}
+    </article>
+  );
+}
+
+function TrainingTelemetry({ progress }: { progress: NonNullable<Job["progress"]> }) {
+  const percent = progress.percent || (progress.current && progress.total ? progress.current / progress.total * 100 : 0);
+  return <div className="telemetry"><div className="telemetry-bar"><span style={{ width: `${percent}%` }} /></div><div><span>{progress.message || "Training"}</span>{progress.loss != null && <span>loss {progress.loss.toFixed(4)}</span>}{progress.eta_seconds != null && <span>ETA {Math.ceil(progress.eta_seconds / 60)}m</span>}{progress.gpu_utilization_percent != null && <span>GPU {progress.gpu_utilization_percent}%</span>}{progress.cost_usd != null && <span>${Number(progress.cost_usd).toFixed(3)}</span>}</div></div>;
+}
+
+function FactoryResults({ evaluation }: { evaluation: NonNullable<Job["deterministic_evaluation"]> }) {
+  const labels: Record<string, string> = { base_no_skill: "Qwen Base", base_with_skill: "Qwen + Skill", lora_short_prompt: "Qwen LoRA" };
+  return <div className="factory-results"><div className="results-title"><h3>Frozen TEST results</h3><span className={evaluation.passed ? "pass" : "fail"}>{evaluation.passed ? "PASS" : "REPAIR"}</span></div><div>{Object.entries(evaluation.conditions || {}).map(([name, result]) => <section key={name}><strong>{labels[name] || name}</strong><b>{((result.field_f1 || 0) * 100).toFixed(1)}% F1</b><small>{((result.schema_pass_rate || 0) * 100).toFixed(1)}% schema · {((result.exact_form_rate || 0) * 100).toFixed(1)}% exact</small></section>)}</div></div>;
 }
 
 function TabButton({ active, children, onClick }: { active: boolean; children: React.ReactNode; onClick: () => void }) { return <button className={active ? "active" : ""} onClick={onClick}>{children}</button>; }

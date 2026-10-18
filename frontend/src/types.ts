@@ -56,5 +56,70 @@ export type Job = {
   status: string;
   created_at: string;
   updated_at: string;
-  events?: Array<{ to_status: string; occurred_at: string }>;
+  failure_code?: string;
+  failure_message?: string;
+  dataset_round?: number;
+  route?: RouteDecision;
+  progress?: FactoryProgress;
+  validation?: Record<string, unknown>;
+  deterministic_evaluation?: FactoryEvaluation;
+  publish_result?: {
+    artifact_uri: string;
+    adapter: Adapter;
+  };
+  devin_session?: {
+    session_id: string;
+    url?: string;
+    status: string;
+    pull_request_url?: string;
+    acus_consumed?: number;
+  };
+  events?: Array<{
+    sequence: number;
+    from_status?: string;
+    to_status: string;
+    occurred_at: string;
+    metadata?: Record<string, unknown>;
+  }>;
+  stage_attempts?: Array<{
+    stage: string;
+    round: number;
+    status: string;
+    claimed_at: string;
+    completed_at?: string;
+  }>;
+};
+
+export type RouteDecision = {
+  decision: string;
+  adapter_id: string | null;
+  confidence: number;
+  reason: string;
+  workflow_fingerprint?: string;
+  source?: string;
+  requires_confirmation?: boolean;
+};
+
+export type FactoryProgress = {
+  stage?: string;
+  message?: string;
+  current?: number;
+  total?: number;
+  percent?: number;
+  eta_seconds?: number;
+  loss?: number;
+  gpu_utilization_percent?: number;
+  gpu_memory_used_gb?: number;
+  cost_usd?: string | number;
+};
+
+export type FactoryEvaluation = {
+  passed?: boolean;
+  test_cases?: number;
+  conditions?: Record<string, {
+    field_f1?: number;
+    exact_form_rate?: number;
+    schema_pass_rate?: number;
+    mean_latency_seconds?: number;
+  }>;
 };

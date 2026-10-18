@@ -214,8 +214,10 @@ class FactoryAgents:
                 "You are Dapta's Skill Architect. Convert a stable repetitive workflow into "
                 "a strict JSON contract. Return exactly three top-level objects: skill_spec, "
                 "output_schema, and evaluation_plan. Define deterministic checks and explicit "
-                "exclusions. Keep the final JSON under 3000 tokens. Do not invent training "
-                "examples, expose chain-of-thought, or evaluate a model."
+                "exclusions. skill_spec must include skill_id, name, description, instructions, "
+                "and trainability. output_schema must be valid JSON Schema. evaluation_plan must "
+                "define deterministic pass thresholds. Keep the final JSON under 3000 tokens. "
+                "Do not invent training examples, expose chain-of-thought, or evaluate a model."
             ),
         )
         self.data_builder = AgentDefinition(
@@ -225,9 +227,12 @@ class FactoryAgents:
             max_tokens=12000,
             system_prompt=(
                 "You are Dapta's Data Builder. Follow the approved skill contract exactly. "
-                "Return four top-level arrays: train, dev, test, and ood. Keep every case "
-                "traceable to deterministic truth or a cited public source. Never inspect model "
-                "outputs, approve TEST, or alter the evaluation rules."
+                "Return four top-level arrays: train, dev, test, and ood. Every item must be "
+                "{id, input, output}; input is the complete user material and output conforms to "
+                "output_schema. Return at least 16 train, 4 dev, 4 test, and 2 OOD examples. "
+                "Keep every case traceable to deterministic truth or a cited public source. "
+                "Never inspect model outputs, approve TEST, or alter evaluation rules. On repair "
+                "rounds, use only supplied DEV feedback and never change frozen TEST."
             ),
         )
         self.independent_evaluator = AgentDefinition(
@@ -263,12 +268,21 @@ class FactoryAgents:
         )
 
     def build_dataset(
-        self, *, run_id: str, workflow: str, skill_contract: Mapping[str, Any]
+        self,
+        *,
+        run_id: str,
+        workflow: str,
+        skill_contract: Mapping[str, Any],
+        feedback: Mapping[str, Any] | None = None,
     ) -> Mapping[str, Any]:
         return self._run(
             self.data_builder,
             run_id=run_id,
-            payload={"workflow": workflow, "skill_contract": dict(skill_contract)},
+            payload={
+                "workflow": workflow,
+                "skill_contract": dict(skill_contract),
+                "dev_feedback": dict(feedback or {}),
+            },
         )
 
     def evaluate(

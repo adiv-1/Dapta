@@ -15,9 +15,15 @@ Implemented and tested:
   active time, idempotency, and separate factory/training/inference attribution.
 - JEV routing with a registry-similarity fallback that requires confirmation.
 - Kimi K3 skill-architect and data-builder stages through OpenRouter.
-- Devin v3 skill-integration sessions and PR evidence synchronization.
-- deterministic split validation with frozen test hashes and `awaiting_compute`.
-- Hostinger A100 controller/model-worker containers and LoRA inference loading.
+- Devin v3 skill-integration sessions, polling, and tested PR evidence.
+- deterministic schema, label, leakage, duplicate, split, and frozen-test validation.
+- RunPod single-GPU QLoRA training with a hard time/cost preflight, live telemetry,
+  inference-model unload/reload, and exact GPU-active cost accounting.
+- independent base/base+Skill/LoRA evaluation, targeted DEV-only repair rounds,
+  and automatic Hugging Face publication after the quality gate passes.
+- private Supabase mirroring for factory stages and agent artifacts; uploaded
+  judge documents, credentials, and internal reasoning are never mirrored.
+- RunPod controller/model worker with dynamic Hugging Face LoRA loading.
 - private Base44 React app with Chat, Performance, and Skills & Adapters tabs.
 - Base44 authentication boundary, secret proxy, and durable run/job snapshots.
 - Sentry backend traces/logs plus masked React Session Replay configuration.
@@ -28,12 +34,8 @@ The NDA adapter is stored at
 improved field F1 from 57.58% (base) and 61.28% (base + Skill) to 70.75% with
 the LoRA; exact-form accuracy improved from 6.02% to 33.73%.
 
-Still external/deployment-dependent:
-
-- provision or provide SSH access to the Hostinger A100;
-- point the Base44 `DAPTA_CONTROLLER_URL` secret at that deployment;
-- add the Sentry DSNs and confirm telemetry in the Sentry UI;
-- register the already-exposed tools as an ASI:One/Agentverse agent.
+Remaining external step: register the already-exposed tools as an
+ASI:One/Agentverse agent after the judging API is frozen.
 
 ## Runtime architecture
 
@@ -44,12 +46,13 @@ Invite-only Base44 app
 Base44 secret proxy + durable snapshots
         |
         v
-FastAPI controller on Hostinger
+FastAPI controller on RunPod
         |-- JEV: adapter routing
         |-- OpenRouter: Kimi, GPT-OSS, Claude, GPT
         |-- Devin: tested skill integration PR
         |-- Qwen worker: base model + selected LoRA
         |-- SQLite: cost, usage, jobs, benchmarks
+        |-- Supabase: durable agent stages and artifacts
         |-- Hugging Face: adapters and manifests
         `-- Sentry: replay, traces, logs, AI spans
 ```
@@ -62,8 +65,9 @@ queued -> architecting -> integrating -> building_dataset -> validating
        -> publishing -> ready | failed
 ```
 
-The pause at `awaiting_compute` is deliberate: an agent can finish the safe,
-deterministic preparation without claiming GPU work happened.
+`awaiting_compute` is a real budget gate. The autonomous runner advances after
+the cost cap and connected GPU checks pass; it never records training before
+the worker starts.
 
 ## API
 
@@ -80,6 +84,7 @@ GET  /v1/benchmarks
 GET  /v1/adapters
 POST /v1/jobs
 GET  /v1/jobs/{id}
+GET  /v1/jobs/{id}/events
 GET  /v1/agent/tools
 POST /v1/agent/tools/{tool_name}
 ```
@@ -115,18 +120,23 @@ PYTHONPATH=backend .venv/bin/python -m unittest discover -s backend/tests -v
 cd frontend && npm run build
 ```
 
-## Hostinger A100 deployment
+## RunPod deployment
 
-On the GPU VM, clone the repository, create `.env`, and run:
+Use a persistent `/workspace` volume, clone the repository to
+`/workspace/dapta`, install the full pinned runtime, and create
+`/workspace/dapta/runtime.env` from `.env.example`:
 
 ```bash
-docker compose -f deploy/docker-compose.hostinger.yml up -d --build
+python3 -m venv /workspace/dapta/.venv
+/workspace/dapta/.venv/bin/pip install -r backend/requirements.txt
+./deploy/runpod-start.sh
 curl http://127.0.0.1:8000/health
 ```
 
-Only port `8000` should be public. The Qwen worker stays on the private Compose
-network. Set a long random `DAPTA_CONTROL_TOKEN`, expose the controller through
-Hostinger HTTPS, then save the same URL and token as Base44 project secrets.
+Only HTTP port `8000` is public through the RunPod proxy. The Qwen worker binds
+to loopback on `8002`. Set a long random `DAPTA_CONTROL_TOKEN`, then save the
+proxy URL and the same token as Base44 project secrets. `runpod-stop.sh` stops
+both local services but does not stop or delete the RunPod pod.
 
 ## Base44
 
@@ -147,8 +157,10 @@ records but never stores API keys or uploads user documents to Hugging Face.
 
 - `.env` is ignored and is the only local location for provider credentials.
 - Base44 receives only the controller URL/token and its Sentry browser DSN.
-- Hostinger receives OpenRouter, JEV, Devin, Hugging Face, Qwen, and Sentry
+- RunPod receives OpenRouter, JEV, Devin, Hugging Face, Supabase, Qwen, and Sentry
   server credentials.
+- Supabase receives generated factory artifacts and stage evidence—not browser
+  uploads, provider secrets, or chain-of-thought.
 - Hugging Face receives adapter weights, manifests, `SKILL.md`, and benchmark
   artifacts—not private judge documents.
 
