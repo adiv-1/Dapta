@@ -15,7 +15,7 @@ Implemented and tested:
   active time, idempotency, and separate factory/training/inference attribution.
 - JEV routing with a registry-similarity fallback that requires confirmation.
 - Kimi K3 skill-architect and data-builder stages through OpenRouter.
-- Devin v3 skill-integration sessions with generated skill evidence stored beside each adapter in Hugging Face; generated skills never modify GitHub.
+- Devin v3 skill-integration sessions with generated skill evidence stored at `generated/<skill_id>/<version>/skill/` beside each adapter in Hugging Face; generated skills never modify GitHub.
 - deterministic schema, label, leakage, duplicate, split, and frozen-test validation.
 - RunPod single-GPU QLoRA training with a hard time/cost preflight, live telemetry,
   inference-model unload/reload, and exact GPU-active cost accounting.
