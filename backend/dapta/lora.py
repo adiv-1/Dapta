@@ -17,7 +17,9 @@ machine: a warm claim must report will_provision false. JEV is not involved.
 from __future__ import annotations
 
 import json
+import logging
 import uuid
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from typing import Any, Mapping, Protocol
 
@@ -31,6 +33,50 @@ from .vultr import CONFIRMATION
 
 HELD_OUT_LIMIT = 32
 KIMI_K3 = "moonshotai/kimi-k3"
+
+
+@contextmanager
+def _observe_agent(agent: str, *, model: str | None = None):
+    try:
+        import sentry_sdk
+    except ImportError:
+        yield
+        return
+    if not sentry_sdk.is_initialized():
+        yield
+        return
+    attributes: dict[str, Any] = {
+        "gen_ai.operation.name": "invoke_agent",
+        "gen_ai.agent.name": agent,
+        "gen_ai.pipeline.name": "lora_agent",
+    }
+    if model:
+        attributes["gen_ai.request.model"] = model
+        attributes["gen_ai.response.model"] = model
+    with sentry_sdk.start_span(op="gen_ai.invoke_agent", name=f"invoke_agent {agent}") as span:
+        for key, value in attributes.items():
+            span.set_data(key, value)
+        yield
+
+
+def _log_run(*, status: str, skill_id: str, device: str | None, stage_count: int) -> None:
+    try:
+        import sentry_sdk
+    except ImportError:
+        return
+    if not sentry_sdk.get_client().is_active():
+        return
+    # Uvicorn's logging config disables loggers created before startup.
+    logger = logging.getLogger("dapta.lora")
+    logger.disabled = False
+    logger.setLevel(logging.INFO)
+    logger.info(
+        "LoRA agent finished skill_id=%s status=%s device=%s stage_count=%s",
+        skill_id,
+        status,
+        device or "unset",
+        stage_count,
+    )
 
 
 class TaskAgent(Protocol):
@@ -134,24 +180,26 @@ class LoraAgent:
             raise ValueError("skill_id is required")
 
         run_id = run_id or str(uuid.uuid4())
-        self.trace.start(run_id=run_id, task=task, skill_id=skill_id)
-        try:
-            return self._build(
-                task=task,
-                skill_id=skill_id,
-                confirm_spend=confirm_spend,
-                run_id=run_id,
-            )
-        except Exception as error:
-            self._remember(
-                run_id,
-                "error",
-                "lora_agent",
-                task,
-                {"error": str(error), "type": type(error).__name__},
-            )
-            self.trace.finish(run_id=run_id, status="failed", device=None, artifact_uri=None)
-            raise
+        with _observe_agent("lora_agent"):
+            self.trace.start(run_id=run_id, task=task, skill_id=skill_id)
+            try:
+                return self._build(
+                    task=task,
+                    skill_id=skill_id,
+                    confirm_spend=confirm_spend,
+                    run_id=run_id,
+                )
+            except Exception as error:
+                _log_run(status="failed", skill_id=skill_id, device=None, stage_count=0)
+                self._remember(
+                    run_id,
+                    "error",
+                    "lora_agent",
+                    task,
+                    {"error": str(error), "type": type(error).__name__},
+                )
+                self.trace.finish(run_id=run_id, status="failed", device=None, artifact_uri=None)
+                raise
 
     def _build(
         self,
@@ -179,28 +227,32 @@ class LoraAgent:
         remember("prompted", "user", task, {"task": task, "skill_id": skill_id})
 
         task_prompt = _task_prompt(task)
-        understanding = dict(self.task_agent.understand(task=task))
+        with _observe_agent("task_agent"):
+            understanding = dict(self.task_agent.understand(task=task))
         _require_understanding(understanding, task)
         stages.append("understood")
         remember("understood", "task_agent", task_prompt, understanding)
         self._event(run_id, "understood", {"refusals": len(understanding["refusals"])})
 
         skill_prompt = _skill_prompt(understanding, skill_id)
-        skill = dict(self.skill_agent.compose(understanding=understanding, skill_id=skill_id))
+        with _observe_agent("skill_agent", model=KIMI_K3):
+            skill = dict(self.skill_agent.compose(understanding=understanding, skill_id=skill_id))
         _require_skill(skill, skill_id)
         stages.append("skill_written")
         remember("skill_written", "skill_agent", skill_prompt, skill)
         self._event(run_id, "skill_written", {"model": skill["model"], "rules": len(skill["rules"])})
 
         data_prompt = _data_prompt(skill)
-        data = dict(self.data.generate(skill=skill, run_id=run_id))
+        with _observe_agent("data_agent", model=KIMI_K3):
+            data = dict(self.data.generate(skill=skill, run_id=run_id))
         _require_splits(data)
         stages.append("data_generated")
         remember("data_generated", "data_agent", data_prompt, data)
         self._event(run_id, "data_generated", {"counts": _counts(data), "model": KIMI_K3})
 
         device_prompt = _device_prompt(skill_id, confirm_spend)
-        gpu = dict(self.gpu.claim(confirm_spend=confirm_spend))
+        with _observe_agent("device_agent"):
+            gpu = dict(self.gpu.claim(confirm_spend=confirm_spend))
         device_stage = "cpu_ready" if _on_cpu(gpu) else "gpu_warm"
         remember(device_stage, "device_agent", device_prompt, gpu)
         _require_gpu(gpu)
@@ -212,7 +264,8 @@ class LoraAgent:
         )
 
         code_prompt = _code_prompt(skill, gpu)
-        training_code = self.coder.write(skill=skill, gpu=gpu)
+        with _observe_agent("training_code_agent", model=MODEL_ID):
+            training_code = self.coder.write(skill=skill, gpu=gpu)
         if 'device_map="auto"' in training_code:
             raise ValueError("training loop must not shard across GPUs")
         stages.append("code_written")
@@ -220,15 +273,16 @@ class LoraAgent:
         self._event(run_id, "code_written", {"lines": training_code.count("\n") + 1})
 
         review_prompt = devin_review_prompt(understanding, skill, training_code, data, gpu)
-        review = dict(
-            self.reviewer.review(
-                understanding=understanding,
-                skill=skill,
-                training_code=training_code,
-                data=data,
-                gpu=gpu,
+        with _observe_agent("devin"):
+            review = dict(
+                self.reviewer.review(
+                    understanding=understanding,
+                    skill=skill,
+                    training_code=training_code,
+                    data=data,
+                    gpu=gpu,
+                )
             )
-        )
         if not isinstance(review.get("passed"), bool):
             raise ValueError("Devin review must include a boolean passed")
         stages.append("reviewed")
@@ -252,16 +306,17 @@ class LoraAgent:
             return package
 
         train_prompt = _train_prompt(task, skill_id, training_code, data, gpu)
-        training = dict(
-            self.trainer.train(
-                task=task,
-                skill_id=skill_id,
-                training_code=training_code,
-                data=data,
-                gpu=gpu,
-                run_id=run_id,
+        with _observe_agent("trainer", model=MODEL_ID):
+            training = dict(
+                self.trainer.train(
+                    task=task,
+                    skill_id=skill_id,
+                    training_code=training_code,
+                    data=data,
+                    gpu=gpu,
+                    run_id=run_id,
+                )
             )
-        )
         for name in ("version", "base_model", "loss"):
             if name not in training:
                 raise ValueError(f"trainer omitted {name}")
@@ -270,7 +325,8 @@ class LoraAgent:
         self._event(run_id, "trained", {"version": training["version"]})
 
         eval_prompt = _eval_prompt(training, data)
-        evaluation = dict(self.evaluator.evaluate(training=training, data=data))
+        with _observe_agent("evaluator"):
+            evaluation = dict(self.evaluator.evaluate(training=training, data=data))
         if evaluation.get("condition") not in (None, "qwen_lora"):
             raise ValueError("bounded evaluation must not score other models")
         if evaluation.get("held_out_cases", 0) > HELD_OUT_LIMIT:
@@ -325,6 +381,13 @@ class LoraAgent:
             status=str(package["status"]),
             device=gpu.get("name"),
             artifact_uri=package.get("artifact_uri"),
+        )
+        stages = package.get("stages") or []
+        _log_run(
+            status=str(package["status"]),
+            skill_id=str(package.get("skill_id") or ""),
+            device=gpu.get("name"),
+            stage_count=len(stages) if isinstance(stages, list) else 0,
         )
 
     def _event(self, run_id: str, stage: str, metadata: Mapping[str, Any]) -> None:

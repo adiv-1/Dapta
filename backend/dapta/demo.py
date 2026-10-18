@@ -8,12 +8,14 @@ and the adapter store are stand-ins, so a run does not load Qwen or spend money.
 from __future__ import annotations
 
 import argparse
+import json
+import os
 import uuid
 from contextvars import ContextVar
 from pathlib import Path
 from typing import Any, Mapping
 
-from fastapi.responses import FileResponse
+from fastapi.responses import HTMLResponse
 
 from .api import create_app
 from .jobs import JobStore
@@ -152,7 +154,91 @@ def demo_agent(database: Path | str) -> LoraAgent:
     )
 
 
+_PROMPT_FIELDS = {
+    "gen_ai.input.messages",
+    "gen_ai.output.messages",
+    "gen_ai.system_instructions",
+    "gen_ai.request.messages",
+    "gen_ai.response.text",
+    "gen_ai.tool.call.arguments",
+    "gen_ai.tool.call.result",
+}
+_REPLAY_BUNDLE = "https://browser.sentry-cdn.com/11.8.0/bundle.tracing.replay.min.js"
+_REPLAY_INTEGRITY = "sha384-NbmC2DzbPC7vdsOR/jiH885iVV6/OznKPMIrvW/e+5MbQ0khLpHwiPQeiKPUvjHZ"
+
+
+def _drop_prompt_fields(payload: dict[str, Any]) -> None:
+    data = payload.get("data")
+    if not isinstance(data, dict):
+        return
+    for key in list(data):
+        if key in _PROMPT_FIELDS or "prompt" in key.lower():
+            data.pop(key, None)
+
+
+def _scrub_sentry_event(event: dict[str, Any], hint: dict[str, Any]) -> dict[str, Any]:
+    request = event.get("request")
+    if isinstance(request, dict):
+        request.pop("data", None)
+        request.pop("cookies", None)
+    _drop_prompt_fields(event)
+    for span in event.get("spans") or []:
+        if isinstance(span, dict):
+            _drop_prompt_fields(span)
+    return event
+
+
+def _init_sentry() -> None:
+    dsn = os.environ.get("SENTRY_DSN", "").strip()
+    if not dsn:
+        return
+    import sentry_sdk
+
+    options: dict[str, Any] = {
+        "dsn": dsn,
+        "environment": os.environ.get("SENTRY_ENVIRONMENT", "development"),
+        "send_default_pii": False,
+        "include_local_variables": False,
+        "traces_sample_rate": 1.0,
+        "enable_logs": True,
+        "before_send": _scrub_sentry_event,
+    }
+    release = os.environ.get("SENTRY_RELEASE", "").strip()
+    if release:
+        options["release"] = release
+    sentry_sdk.init(**options)
+    from sentry_sdk.integrations.logging import ignore_logger_for_sentry_logs
+
+    for name in ("uvicorn", "uvicorn.access", "uvicorn.error", "httpx"):
+        ignore_logger_for_sentry_logs(name)
+
+
+def _page() -> str:
+    page = FRONTEND.read_text()
+    dsn = os.environ.get("SENTRY_DSN", "").strip()
+    if not dsn:
+        return page
+    environment = os.environ.get("SENTRY_ENVIRONMENT", "development")
+    session_rate = 0.1 if environment == "production" else 1.0
+    snippet = f"""
+<script src="{_REPLAY_BUNDLE}" integrity="{_REPLAY_INTEGRITY}" crossorigin="anonymous"></script>
+<script>
+Sentry.init({{
+  dsn: {json.dumps(dsn)},
+  environment: {json.dumps(environment)},
+  sendDefaultPii: false,
+  tracesSampleRate: 1.0,
+  replaysSessionSampleRate: {session_rate},
+  replaysOnErrorSampleRate: 1.0,
+  integrations: [Sentry.replayIntegration({{ maskAllText: true, maskAllInputs: true, blockAllMedia: true }})]
+}});
+</script>
+"""
+    return page.replace("</head>", snippet + "</head>", 1)
+
+
 def demo_app(database: Path | str) -> Any:
+    _init_sentry()
     app = create_app(database, lora_agent=demo_agent(database))
 
     @app.middleware("http")
@@ -166,8 +252,8 @@ def demo_app(database: Path | str) -> Any:
             GPU.reset(gpu)
 
     @app.get("/")
-    def index() -> FileResponse:
-        return FileResponse(FRONTEND)
+    def index() -> HTMLResponse:
+        return HTMLResponse(_page())
 
     return app
 

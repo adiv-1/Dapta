@@ -29,7 +29,7 @@
 <body>
   <main>
     <h1>LoRA agent</h1>
-    <p class="note">GPU training is unchanged. Choose CPU to run the same pipeline on this machine and see every stage. Every prompt and every agent output is saved to Supabase. A run does not start until SUPABASE_URL and SUPABASE_SECRET_KEY are set. Devin, training, and the adapter store are local stand-ins, so a run does not load Qwen or spend money.</p>
+    <p class="note">GPU training is unchanged. Choose CPU to run the same pipeline on this machine and see every stage. Every prompt and every agent output is saved to Supabase. A run does not start until SUPABASE_URL and SUPABASE_SECRET_KEY are set. Devin, training, and the adapter store are local stand-ins, so a run does not load Qwen or spend money. Sentry records errors, traces, logs, and a masked replay of this page. Task text stays in Supabase.</p>
     <form id="bench">
       <label for="task">Task</label>
       <textarea id="task" name="task">Turn receipt images into a strict expense-report JSON object.</textarea>
