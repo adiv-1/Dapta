@@ -1,5 +1,8 @@
 # Dapta
 
+![tag:innovationlab](https://img.shields.io/badge/innovationlab-3D8BD3)
+![tag:hackathon](https://img.shields.io/badge/hackathon-5F43F1)
+
 Dapta turns stable, repetitive workflows into measured LoRA specialists for
 `Qwen/Qwen3-VL-8B-Instruct`. It compares the adapter with configured frontier
 models on output quality, time, tokens, and cost, and preserves the evidence for
@@ -34,8 +37,20 @@ The NDA adapter is stored at
 improved field F1 from 57.58% (base) and 61.28% (base + Skill) to 70.75% with
 the LoRA; exact-form accuracy improved from 6.02% to 33.73%.
 
-Remaining external step: register the already-exposed tools as an
-ASI:One/Agentverse agent after the judging API is frozen.
+An isolated ASI:One companion is implemented in `asi1/`. The remaining external step is
+to run it beside DAPTA, register its stable identity through Agentverse Mailbox, and verify
+the primary ready-adapter workflow from ASI:One.
+
+## ASI:One agent
+
+The public **DAPTA Adapter Factory** is a uAgent using the Agent Chat Protocol. It is the
+only Agentverse-facing orchestrator: JEV, Kimi/OpenRouter, Devin, the factory runner,
+RunPod training, evaluation, publishing, and private Qwen+LoRA execution remain internal.
+It can execute a ready adapter as the primary qualifying task and, during a supervised
+build window, route and create a new adapter after explicit confirmation.
+
+Setup, privacy controls, safe-spend configuration, local tests, and the ASI:One demo
+sequence are documented in [`asi1/README.md`](asi1/README.md).
 
 ## Runtime architecture
 
