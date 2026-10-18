@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "id": "contractnli-official",
+  "source": "https://stanfordnlp.github.io/contract-nli/resources/contract-nli.zip",
+  "size_bytes": 65362913,
+  "sha256": "e03fc77bbf8b53e2976a250e81d8a294bc3d5e5fb014521e477dee9340d6287b",
+  "members": {
+    "contract-nli/train.json": "dbceb356cd6203b35b27be94a5fa85e499a81c34c42c89ad53060b39f0257ba5",
+    "contract-nli/dev.json": "310af7d661d2ab50ee3700169cef524c75f39fb296bbf5a515c229eb0f42e68e",
+    "contract-nli/test.json": "460267b56052a2dc5aead98eb35eadef9e6734d5723d37b4a9790e410f812387"
+  },
+  "license": "CC-BY-4.0 with Hitachi America TERMS (rights granted in accordance with CC BY 4.0)",
+  "attribution": "Koreeda, Y. and Manning, C. D. ContractNLI: A Dataset for Document-level Natural Language Inference for Contracts. Findings of EMNLP 2021, pp. 1907-1919. https://aclanthology.org/2021.findings-emnlp.164/",
+  "splits": {
+    "train": 423,
+    "dev": 61,
+    "test": 123
+  },
+  "hypotheses": 17,
+  "retrieval": "download on the training machine and verify sha256; dataset contents are not committed"
+}

@@ -1,0 +1,116 @@
+{
+  "name": "nda-triage",
+  "version": "1.0.0",
+  "description": "Read the full text of a non-disclosure agreement and decide, for each of the 17 ContractNLI hypotheses, whether the agreement entails it, contradicts it, or does not mention it.",
+  "input": {
+    "type": "text",
+    "content": "Full NDA text as extracted by ContractNLI; no images."
+  },
+  "output": {
+    "type": "json_object",
+    "schema": "output_schema.json",
+    "keys": "ContractNLI hypothesis ids, numeric order"
+  },
+  "hypotheses": [
+    {
+      "id": "nda-1",
+      "short_description": "Explicit identification",
+      "hypothesis": "All Confidential Information shall be expressly identified by the Disclosing Party."
+    },
+    {
+      "id": "nda-2",
+      "short_description": "None-inclusion of non-technical information",
+      "hypothesis": "Confidential Information shall only include technical information."
+    },
+    {
+      "id": "nda-3",
+      "short_description": "Inclusion of verbally conveyed information",
+      "hypothesis": "Confidential Information may include verbally conveyed information."
+    },
+    {
+      "id": "nda-4",
+      "short_description": "Limited use",
+      "hypothesis": "Receiving Party shall not use any Confidential Information for any purpose other than the purposes stated in Agreement."
+    },
+    {
+      "id": "nda-5",
+      "short_description": "Sharing with employees",
+      "hypothesis": "Receiving Party may share some Confidential Information with some of Receiving Party's employees."
+    },
+    {
+      "id": "nda-7",
+      "short_description": "Sharing with third-parties",
+      "hypothesis": "Receiving Party may share some Confidential Information with some third-parties (including consultants, agents and professional advisors)."
+    },
+    {
+      "id": "nda-8",
+      "short_description": "Notice on compelled disclosure",
+      "hypothesis": "Receiving Party shall notify Disclosing Party in case Receiving Party is required by law, regulation or judicial process to disclose any Confidential Information."
+    },
+    {
+      "id": "nda-10",
+      "short_description": "Confidentiality of Agreement",
+      "hypothesis": "Receiving Party shall not disclose the fact that Agreement was agreed or negotiated."
+    },
+    {
+      "id": "nda-11",
+      "short_description": "No reverse engineering",
+      "hypothesis": "Receiving Party shall not reverse engineer any objects which embody Disclosing Party's Confidential Information."
+    },
+    {
+      "id": "nda-12",
+      "short_description": "Permissible development of similar information",
+      "hypothesis": "Receiving Party may independently develop information similar to Confidential Information."
+    },
+    {
+      "id": "nda-13",
+      "short_description": "Permissible acquirement of similar information",
+      "hypothesis": "Receiving Party may acquire information similar to Confidential Information from a third party."
+    },
+    {
+      "id": "nda-15",
+      "short_description": "No licensing",
+      "hypothesis": "Agreement shall not grant Receiving Party any right to Confidential Information."
+    },
+    {
+      "id": "nda-16",
+      "short_description": "Return of confidential information",
+      "hypothesis": "Receiving Party shall destroy or return some Confidential Information upon the termination of Agreement."
+    },
+    {
+      "id": "nda-17",
+      "short_description": "Permissible copy",
+      "hypothesis": "Receiving Party may create a copy of some Confidential Information in some circumstances."
+    },
+    {
+      "id": "nda-18",
+      "short_description": "No solicitation",
+      "hypothesis": "Receiving Party shall not solicit some of Disclosing Party's representatives."
+    },
+    {
+      "id": "nda-19",
+      "short_description": "Survival of obligations",
+      "hypothesis": "Some obligations of Agreement may survive termination of Agreement."
+    },
+    {
+      "id": "nda-20",
+      "short_description": "Permissible post-agreement possession",
+      "hypothesis": "Receiving Party may retain some Confidential Information even after the return or destruction of Confidential Information."
+    }
+  ],
+  "label_definitions": {
+    "Entailment": "The agreement states or necessarily implies the hypothesis.",
+    "Contradiction": "The agreement states or necessarily implies the opposite of the hypothesis.",
+    "NotMentioned": "The agreement neither entails nor contradicts the hypothesis."
+  },
+  "runtime_prompt": "Triage this NDA against the 17 ContractNLI hypotheses. Respond with JSON only.",
+  "exclusions": [
+    "No evidence spans or explanations in the output; labels only.",
+    "No legal advice, risk scoring, or recommendations.",
+    "No labels for hypotheses outside the 17 listed."
+  ],
+  "training_data": {
+    "source": "source.lock.json",
+    "splits": "Official ContractNLI train/dev/test; TEST is frozen by hash and never altered."
+  }
+}

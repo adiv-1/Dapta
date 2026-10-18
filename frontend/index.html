@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dapta LoRA agent</title>
+  <style>
+    :root { color-scheme: light; font-family: "Iowan Old Style", Palatino, Georgia, serif; }
+    body { margin: 0; background: #f4f1ea; color: #1c1915; }
+    main { max-width: 820px; margin: 0 auto; padding: 32px 20px 64px; }
+    h1 { font-size: 2rem; font-weight: 500; margin-bottom: 0.25rem; }
+    p.note { color: #5c564c; margin-top: 0; }
+    form, section { background: white; border: 1px solid #e4ddd0; border-radius: 12px; padding: 16px; }
+    label { display: block; font-family: ui-sans-serif, system-ui, sans-serif; font-size: 0.85rem; margin: 12px 0 4px; }
+    textarea, input, select { width: 100%; box-sizing: border-box; font: 16px/1.4 ui-sans-serif, system-ui, sans-serif; padding: 8px 10px; border: 1px solid #cfc6b8; border-radius: 8px; background: #fffdf8; }
+    textarea { min-height: 96px; }
+    .row { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+    .row label { margin: 0; display: flex; gap: 8px; align-items: center; }
+    button { font: 15px ui-sans-serif, system-ui, sans-serif; background: #1c1915; color: #f4f1ea; border: 0; border-radius: 8px; padding: 10px 14px; cursor: pointer; }
+    button:disabled { opacity: 0.5; }
+    section { margin-top: 16px; }
+    .status { font-family: ui-sans-serif, system-ui, sans-serif; font-size: 0.95rem; }
+    ol { padding-left: 1.2rem; }
+    pre { overflow: auto; background: #1c1915; color: #f4f1ea; padding: 12px; border-radius: 8px; font-size: 12px; line-height: 1.45; }
+    h2 { font-size: 1rem; font-weight: 500; margin: 16px 0 8px; }
+    .error { color: #8a2b1d; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>LoRA agent</h1>
+    <p class="note">GPU training is unchanged. Choose CPU to run the same pipeline on this machine and see every stage. Every prompt and every agent output is saved to Supabase. A run does not start until SUPABASE_URL and SUPABASE_SECRET_KEY are set. Devin, training, and the adapter store are local stand-ins, so a run does not load Qwen or spend money.</p>
+    <form id="bench">
+      <label for="task">Task</label>
+      <textarea id="task" name="task">Turn receipt images into a strict expense-report JSON object.</textarea>
+      <label for="skill">Skill id</label>
+      <input id="skill" name="skill_id" value="receipt-to-expense">
+      <label for="gpu">Device</label>
+      <select id="gpu" name="gpu">
+        <option value="cpu" selected>CPU</option>
+        <option value="a40">NVIDIA A40, 48 GB</option>
+        <option value="a16">NVIDIA A16, 16 GB</option>
+      </select>
+      <div class="row">
+        <label><input type="checkbox" id="spend"> Confirm spend</label>
+        <label><input type="checkbox" id="devin" checked> Devin passes the review</label>
+        <button type="submit" id="run">Run agent</button>
+      </div>
+    </form>
+    <section id="result" hidden>
+      <p class="status" id="status"></p>
+      <ol id="stages"></ol>
+      <p id="meta"></p>
+      <h2>Task understanding</h2>
+      <p id="understanding"></p>
+      <h2>Skill document</h2>
+      <pre id="skill" hidden></pre>
+      <ul id="findings"></ul>
+      <h2>Training code</h2>
+      <pre id="code" hidden></pre>
+    </section>
+  </main>
+  <script>
+    const form = document.querySelector("#bench");
+    const result = document.querySelector("#result");
+    const status = document.querySelector("#status");
+    const stages = document.querySelector("#stages");
+    const meta = document.querySelector("#meta");
+    const understanding = document.querySelector("#understanding");
+    const skill = document.querySelector("#skill");
+    const findings = document.querySelector("#findings");
+    const code = document.querySelector("#code");
+    const button = document.querySelector("#run");
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      button.disabled = true;
+      status.className = "status";
+      result.hidden = false;
+      status.textContent = "Running…";
+      stages.replaceChildren();
+      findings.replaceChildren();
+      meta.textContent = "";
+      understanding.textContent = "";
+      skill.hidden = true;
+      code.hidden = true;
+      const headers = {
+        "Content-Type": "application/json",
+        "X-Demo-Gpu": document.querySelector("#gpu").value,
+      };
+      if (!document.querySelector("#devin").checked) headers["X-Devin-Review"] = "fail";
+      try {
+        const response = await fetch("/lora", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            task: document.querySelector("#task").value,
+            skill_id: document.querySelector("#skill").value,
+            confirm_spend: document.querySelector("#spend").checked ? "PROVISION" : null,
+          }),
+        });
+        const body = await response.json();
+        if (!response.ok) {
+          status.textContent = body.detail || response.statusText;
+          status.classList.add("error");
+          return;
+        }
+        status.textContent = `Status: ${body.status}`;
+        for (const stage of body.stages || []) {
+          const item = document.createElement("li");
+          item.textContent = stage.replaceAll("_", " ");
+          stages.append(item);
+        }
+        const bits = [];
+        if (body.gpu?.device === "cpu") bits.push("CPU");
+        else if (body.gpu) {
+          const warm = body.gpu.warm ? "warm" : "cold";
+          bits.push(`${body.gpu.name}, ${body.gpu.vram_gb} GB, ${warm}`);
+        }
+        if (body.skill?.model) bits.push(body.skill.model);
+        if (body.data_counts) bits.push(`splits ${JSON.stringify(body.data_counts)}`);
+        if (body.artifact_uri) bits.push(body.artifact_uri);
+        if (body.evaluation) bits.push(`held-out cases ${body.evaluation.held_out_cases}`);
+        if (body.stored_events) bits.push(`${body.stored_events} records saved`);
+        meta.textContent = bits.join(" · ");
+        if (body.understanding) {
+          const refusals = (body.understanding.refusals || []).join(" ");
+          understanding.textContent = `${body.understanding.summary} Refusals: ${refusals}`;
+        }
+        if (body.skill) {
+          skill.hidden = false;
+          skill.textContent = JSON.stringify(body.skill, null, 2);
+        }
+        for (const finding of body.review?.findings || []) {
+          const item = document.createElement("li");
+          item.textContent = finding;
+          findings.append(item);
+        }
+        if (body.training_code) {
+          code.hidden = false;
+          code.textContent = body.training_code;
+        }
+      } catch (error) {
+        status.textContent = error.message;
+        status.classList.add("error");
+      } finally {
+        button.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

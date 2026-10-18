@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 
 from .jobs import AdapterJobOrchestrator, JobConflict, JobNotFound, JobStore
 from .ledger import UsageLedger
+from .lora import LoraAgent
 
 
 class CreateJobRequest(BaseModel):
@@ -16,7 +17,16 @@ class CreateJobRequest(BaseModel):
     skill_id: Optional[str] = Field(default=None, max_length=200)
 
 
-def create_app(database_path: Path | str | None = None) -> FastAPI:
+class LoraTaskRequest(BaseModel):
+    task: str = Field(min_length=10, max_length=20_000)
+    skill_id: str = Field(min_length=1, max_length=200)
+    confirm_spend: Optional[str] = None
+
+
+def create_app(
+    database_path: Path | str | None = None,
+    lora_agent: LoraAgent | None = None,
+) -> FastAPI:
     path = Path(database_path or os.environ.get("DAPTA_LEDGER_PATH", "artifacts/dapta.sqlite3"))
     store = JobStore(path)
     ledger = UsageLedger(path)
@@ -62,6 +72,21 @@ def create_app(database_path: Path | str | None = None) -> FastAPI:
     @app.get("/benchmarks")
     def list_benchmarks() -> list[dict]:
         return ledger.list_benchmarks()
+
+    @app.post("/lora", status_code=status.HTTP_202_ACCEPTED)
+    def build_lora(request: LoraTaskRequest) -> dict:
+        if lora_agent is None:
+            raise HTTPException(status_code=503, detail="LoRA agent is not configured")
+        try:
+            return lora_agent.build(
+                task=request.task,
+                skill_id=request.skill_id,
+                confirm_spend=request.confirm_spend,
+            )
+        except ValueError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
+        except RuntimeError as error:
+            raise HTTPException(status_code=503, detail=str(error)) from error
 
     @app.post("/compare")
     def compare() -> None:

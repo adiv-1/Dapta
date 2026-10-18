@@ -1,0 +1,38 @@
+{
+  "type": "deterministic",
+  "model_based_judging": false,
+  "metrics": [
+    {
+      "name": "valid_json_rate",
+      "definition": "Share of outputs that parse as JSON and validate against output_schema.json."
+    },
+    {
+      "name": "hypothesis_accuracy",
+      "definition": "Share of (document, hypothesis) labels that exactly match the gold choice; invalid outputs count as wrong."
+    },
+    {
+      "name": "document_exact_match",
+      "definition": "Share of documents with all 17 labels correct."
+    },
+    {
+      "name": "macro_f1",
+      "definition": "Unweighted mean F1 over Entailment, Contradiction and NotMentioned across all pairs."
+    },
+    {
+      "name": "per_hypothesis_accuracy",
+      "definition": "hypothesis_accuracy computed separately for each of the 17 ids."
+    }
+  ],
+  "aggregation": {
+    "primary_split": "test",
+    "breakdowns": [
+      "hypothesis",
+      "document_type"
+    ],
+    "notes": "Several hypotheses have no Contradiction examples in TEST (nda-8, 10, 11, 12, 13, 15, 18); per-class F1 is undefined there and is reported as such."
+  },
+  "exclusions": [
+    "No partial credit for evidence or wording.",
+    "No LLM judge."
+  ]
+}

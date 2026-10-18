@@ -41,6 +41,14 @@ class ApiTests(unittest.TestCase):
                 self.assertEqual(client.get("/adapters").json(), [])
                 self.assertEqual(client.get("/benchmarks").json(), [])
                 self.assertEqual(client.post("/compare").status_code, 501)
+                missing_agent = client.post(
+                    "/lora",
+                    json={
+                        "task": "Turn receipt images into a structured expense report.",
+                        "skill_id": "receipt-to-expense",
+                    },
+                )
+                self.assertEqual(missing_agent.status_code, 503)
 
 
 if __name__ == "__main__":

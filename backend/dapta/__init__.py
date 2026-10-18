@@ -1,5 +1,5 @@
 """Dapta adapter factory."""
 
-from .agents import FACTORY_AGENTS, BUILD_STAGES
+from .agents import BUILD_STAGES, FACTORY_AGENTS, LORA_AGENT, LORA_PIPELINE
 
-__all__ = ["FACTORY_AGENTS", "BUILD_STAGES"]
+__all__ = ["BUILD_STAGES", "FACTORY_AGENTS", "LORA_AGENT", "LORA_PIPELINE"]

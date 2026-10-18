@@ -1,0 +1,20 @@
+{
+  "status": "approved_for_implementation",
+  "architect": {
+    "provider": "deterministic",
+    "author": "claude-code",
+    "basis": "Hypotheses and labels copied verbatim from the official ContractNLI labels dictionary; no generated rules."
+  },
+  "artifact_sha256": {
+    "skill_spec.json": "87aeb2977d2c34ca5bc93e643f27f2618e3be513b72b97775dbe438184c33d5c",
+    "output_schema.json": "a9851c9916ac395ae73741c8b22c39cb2a05296aa7aac86e002cb8dbbd74fc27",
+    "evaluation_plan.json": "5f465fca9be24778adf8228d67e5cf222fb17447a9b3085ea2bb56fb5b5724e5"
+  },
+  "review_checks": [
+    "17 official hypotheses with verbatim text, numeric order",
+    "closed JSON object with exactly the three official labels",
+    "official train/dev/test splits; TEST frozen by hash",
+    "no evidence, advice or model-based scoring"
+  ],
+  "project_owner_signoff_required_before_paid_training": true
+}
