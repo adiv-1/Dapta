@@ -41,6 +41,14 @@ set +a
 asi1/.venv/bin/python -m asi1.agent
 ```
 
+On RunPod, the companion can be managed independently from the existing controller and
+worker:
+
+```bash
+./asi1/start.sh
+./asi1/stop.sh
+```
+
 Generate one unique seed, keep it private and never change it after registration. Connect
 the Inspector URL printed at startup to Agentverse using **Mailbox**, then configure the
 name, handle and Innovation Lab category. Keep this process running during the demo.
