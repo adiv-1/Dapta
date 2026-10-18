@@ -259,7 +259,7 @@ function ModelGrid({ run, preparing, running }: { run?: Run; preparing: boolean;
   const now = useLiveNow(preparing || running);
   const elapsed = Math.max(0, Math.floor((now - startedAt.current) / 1000));
   const phase = preparing ? "Matching the best adapter" : elapsed < 3 ? "Reading the skill and document" : elapsed < 8 ? "Generating a structured answer" : "Validating and measuring the result";
-  return <div className="model-grid" aria-live="polite">{conditions.map((name) => <ModelCard key={name} name={name} condition={run?.results[name]} running={preparing || running} phase={phase} />)}</div>;
+  return <><ComparisonScoreboard run={run} running={preparing || running} /><div className="model-grid" aria-live="polite">{conditions.map((name) => <ModelCard key={name} name={name} condition={run?.results[name]} running={preparing || running} phase={phase} />)}</div></>;
 }
 
 const pendingModels: Record<string, string> = {
@@ -272,13 +272,44 @@ function ModelCard({ name, condition, running, phase }: { name: string; conditio
   const metrics = condition?.metrics;
   const completed = condition?.status === "completed";
   const status = completed ? "completed" : condition?.status || (running ? "working" : "queued");
+  const totalTokens = Number(metrics?.input_tokens || 0) + Number(metrics?.output_tokens || 0);
   return (
     <article className="model-card">
       <div className="model-head"><span className={`model-dot ${name}`} /><div><strong>{condition?.label || labels[name]}</strong><small>{condition?.model || pendingModels[name]}</small></div><span className={`status ${completed ? "complete" : ""}`}>{completed ? <Check size={14} /> : <Loader2 className={running ? "spin" : ""} size={14} />}{status}</span></div>
       {condition ? <pre>{JSON.stringify(condition.output, null, 2)}</pre> : <div className="model-working"><div className="working-orbit"><Loader2 className="spin" /></div><strong>{phase}</strong><span>The result will appear here as soon as this model finishes.</span><div className="working-track"><span /></div></div>}
-      <div className="model-stats"><span><Clock3 size={14} />{metrics?.latency_ms ? `${(metrics.latency_ms / 1000).toFixed(2)}s` : "—"}</span><span>{metrics?.input_tokens ?? 0} in</span><span>{metrics?.output_tokens ?? 0} out</span><span>${Number(metrics?.cost_usd || 0).toFixed(5)}</span></div>
+      <div className="model-stats"><div><small>Speed</small><strong>{metrics?.latency_ms ? `${(metrics.latency_ms / 1000).toFixed(2)}s` : "—"}</strong></div><div><small>Total tokens</small><strong>{completed ? totalTokens.toLocaleString() : "—"}</strong><span>{completed ? `${metrics?.input_tokens ?? 0} in · ${metrics?.output_tokens ?? 0} out` : "Waiting for usage"}</span></div><div><small>Cost</small><strong>{completed ? `$${Number(metrics?.cost_usd || 0).toFixed(5)}` : "—"}</strong></div></div>
     </article>
   );
+}
+
+type ScoreMetric = { key: string; label: string; helper: string; value: (condition?: Condition) => number | null; format: (value: number) => string; detail?: (condition?: Condition) => string };
+
+function ComparisonScoreboard({ run, running }: { run?: Run; running: boolean }) {
+  const names = ["qwen_lora", "frontier_a", "frontier_b"];
+  const metrics: ScoreMetric[] = [
+    { key: "speed", label: "Speed", helper: "Lower is faster", value: (condition) => condition?.status === "completed" && condition.metrics.latency_ms != null ? condition.metrics.latency_ms / 1000 : null, format: (value) => `${value.toFixed(2)}s` },
+    { key: "tokens", label: "Total tokens", helper: "Input + output", value: (condition) => condition?.status === "completed" ? Number(condition.metrics.input_tokens || 0) + Number(condition.metrics.output_tokens || 0) : null, format: (value) => value.toLocaleString(), detail: (condition) => `${condition?.metrics.input_tokens ?? 0} in · ${condition?.metrics.output_tokens ?? 0} out` },
+    { key: "cost", label: "Cost", helper: "Lower is cheaper", value: (condition) => condition?.status === "completed" ? Number(condition.metrics.cost_usd || 0) : null, format: (value) => `$${value.toFixed(5)}` },
+  ];
+  const bestByMetric = new Map(metrics.map((metric) => {
+    const values = names.map((name) => metric.value(run?.results[name])).filter((value): value is number => value != null);
+    return [metric.key, values.length ? Math.min(...values) : null];
+  }));
+  const wins = new Map(names.map((name) => [name, metrics.filter((metric) => {
+    const value = metric.value(run?.results[name]);
+    const best = bestByMetric.get(metric.key);
+    return value != null && best != null && Math.abs(value - best) < 0.000001;
+  }).length]));
+  return <section className="comparison-scoreboard"><div className="scoreboard-heading"><div><span>Core comparison</span><h2>Speed, tokens, and cost—side by side.</h2></div><p>These are the three numbers Dapta is built to improve. Lower is better across every row.</p></div><div className="scoreboard-grid"><div className="scoreboard-corner">Metric</div>{names.map((name) => {
+    const condition = run?.results[name];
+    return <div className={`scoreboard-model ${name}`} key={name}><strong>{condition?.label || labels[name]}</strong><span>{running && !condition ? "Working…" : `${wins.get(name) || 0} of 3 wins`}</span></div>;
+  })}{metrics.map((metric) => <div className="scoreboard-row" key={metric.key}><div className="scoreboard-metric"><strong>{metric.label}</strong><span>{metric.helper}</span></div>{names.map((name) => {
+    const condition = run?.results[name];
+    const value = metric.value(condition);
+    const best = bestByMetric.get(metric.key);
+    const isBest = value != null && best != null && Math.abs(value - best) < 0.000001;
+    return <div className={`scoreboard-value ${isBest ? "best" : ""}`} key={name}>{value == null ? <><Loader2 className={running ? "spin" : ""} size={18} /><strong>—</strong></> : <><strong>{metric.format(value)}</strong>{isBest && <b>Best</b>}</>}{metric.detail && value != null && <span>{metric.detail(condition)}</span>}</div>;
+  })}</div>)}</div></section>;
 }
 
 function Performance(props: {
