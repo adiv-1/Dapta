@@ -14,6 +14,42 @@ def progress(**values: Any) -> None:
     print(json.dumps({"type": "progress", **values}, separators=(",", ":")), flush=True)
 
 
+def restore_frozen_compute_dtype(model: Any, torch: Any) -> list[str]:
+    """Keep frozen Qwen compute layers compatible with bf16 activations.
+
+    PEFT intentionally promotes non-quantized parameters to float32 in
+    ``prepare_model_for_kbit_training``. Qwen3-VL's untied output head (and,
+    depending on the Transformers version, frozen vision projections) then
+    receive bf16 activations outside an autocast-safe boundary. Restore only
+    frozen compute layers to bf16; normalization layers remain float32.
+    """
+    converted: list[str] = []
+    visual = getattr(getattr(model, "model", None), "visual", None)
+    if visual is not None:
+        visual.requires_grad_(False)
+        visual.to(dtype=torch.bfloat16)
+        converted.append("model.visual")
+
+    language_model = getattr(getattr(model, "model", None), "language_model", None)
+    embedding = getattr(language_model, "embed_tokens", None)
+    if embedding is not None:
+        embedding.requires_grad_(False)
+        embedding.to(dtype=torch.bfloat16)
+        converted.append("model.language_model.embed_tokens")
+
+    for name, module in model.named_modules():
+        weight = getattr(module, "weight", None)
+        if (
+            isinstance(module, torch.nn.Linear)
+            and weight is not None
+            and weight.dtype == torch.float32
+            and not weight.requires_grad
+        ):
+            module.to(dtype=torch.bfloat16)
+            converted.append(name)
+    return sorted(set(converted))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--bundle", required=True)
@@ -83,6 +119,13 @@ def run(bundle: Mapping[str, Any]) -> dict[str, Any]:
     )
     model.config.use_cache = False
     model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=True)
+    converted_modules = restore_frozen_compute_dtype(model, torch)
+    progress(
+        stage="preparing",
+        message="Aligned frozen Qwen compute layers with bf16 training",
+        percent=14,
+        converted_modules=converted_modules,
+    )
     train_dataset = Dataset.from_list([_sft_case(case, skill) for case in train_cases])
     dev_dataset = Dataset.from_list([_sft_case(case, skill) for case in dev_cases])
     epochs = float(bundle["epochs"])
@@ -115,6 +158,7 @@ def run(bundle: Mapping[str, Any]) -> dict[str, Any]:
         tf32=True,
         optim="paged_adamw_8bit",
         gradient_checkpointing=True,
+        gradient_checkpointing_kwargs={"use_reentrant": False},
         eval_strategy="epoch",
         save_strategy="no",
         logging_steps=1,
