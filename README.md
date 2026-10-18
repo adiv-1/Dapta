@@ -97,6 +97,9 @@ request missing input in the conversation. New specialists collect the output
 contract and representative examples, then wait for **Build specialist** before
 creating a paid factory job. Follow-up questions are a guided intake flow;
 the existing router remains responsible for choosing the path.
+JEV calls use the [System One API](https://docs.typesafe.ai/introduction/quickstart)
+with typed choices for each registered specialist, a new build, or an
+unsupported workflow. Low-confidence specialist matches require confirmation.
 
 Comparisons show latency, total tokens, and recorded cost once in an aligned
 three-model matrix, with quality checks and expandable outputs underneath.

@@ -65,27 +65,56 @@ class WorkflowRouter:
     def _jev(
         self, workflow: str, adapters: list[Mapping[str, Any]], fingerprint: str
     ) -> RouteDecision:
+        candidates = {
+            f"adapter_{index}": adapter for index, adapter in enumerate(adapters)
+            if adapter.get("adapter_id")
+        }
+        criteria = {
+            "create_adapter": (
+                "The user wants a stable, reusable, testable specialist and none of the "
+                "registered adapters matches its exact input, output, and decision rules."
+            ),
+            "unsupported": (
+                "The task is one-off, depends on live external information or tools, "
+                "or cannot be made into a narrow, testable model specialist."
+            ),
+            **{
+                key: f"Use the existing specialist described by {key} in the registry state; "
+                     "its purpose and output contract match this workflow."
+                for key in candidates
+            },
+        }
         payload = {
             "model": self.model,
-            "messages": [
-                {
-                    "role": "system",
-                    "content": (
-                        "Route the workflow to an adapter or request a new adapter. Return JSON "
-                        "with decision (existing_adapter, create_adapter, unsupported), adapter_id, "
-                        "confidence, and reason. Never execute the workflow."
+            "state": {
+                "workflow": workflow,
+                "registry": {
+                    key: {
+                        "adapter_id": adapter["adapter_id"],
+                        "skill_id": adapter.get("skill_id"),
+                        "name": (adapter.get("metadata") or {}).get("name"),
+                        "description": (adapter.get("metadata") or {}).get("description"),
+                        "keywords": (adapter.get("metadata") or {}).get("keywords"),
+                    }
+                    for key, adapter in candidates.items()
+                },
+            },
+            "questions": {
+                "route": {
+                    "type": "choice",
+                    "instructions": (
+                        "Choose the execution path for the entire user workflow, including "
+                        "any clarifications. Match an existing specialist only when its task "
+                        "and output contract fit. A clarification continues the original task. "
+                        "Do not execute the user's task."
                     ),
+                    "criteria": criteria,
                 },
-                {
-                    "role": "user",
-                    "content": json.dumps({"workflow": workflow, "adapters": adapters}),
-                },
-            ],
-            "temperature": 0,
-            "response_format": {"type": "json_object"},
+            },
         }
+        # Jev exposes typed decisions via System One, not chat completions.
         request = urllib.request.Request(
-            f"{self.base_url}/v1/chat/completions",
+            f"{self.base_url}/v1/systemone",
             data=json.dumps(payload).encode("utf-8"),
             method="POST",
             headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
@@ -106,19 +135,27 @@ class WorkflowRouter:
                 "cost_source": "provider_reported" if usage.get("cost") is not None else "none",
                 "response_model": result.get("model"),
             })
-        content = result["choices"][0]["message"]["content"]
-        value = json.loads(content) if isinstance(content, str) else content
-        decision = str(value.get("decision", "create_adapter"))
-        if decision not in {"existing_adapter", "create_adapter", "unsupported"}:
-            decision = "create_adapter"
-        adapter_id = value.get("adapter_id") if decision == "existing_adapter" else None
+        value = result["answers"]["route"]
+        choice = value.get("choice")
+        if choice not in criteria:
+            raise ValueError("JEV returned an unknown route choice")
+        selected = candidates.get(choice)
+        decision = "existing_adapter" if selected else choice
+        adapter_id = selected["adapter_id"] if selected else None
+        confidence = max(0.0, min(1.0, float(value.get("confidence", 0))))
+        reason = (
+            f"JEV selected the {selected.get('skill_id') or 'registered'} specialist"
+            if selected else "JEV recommends creating a specialist for this reusable workflow"
+            if decision == "create_adapter" else "JEV did not identify a suitable specialist workflow"
+        )
         return RouteDecision(
             decision=decision,
             adapter_id=adapter_id,
-            confidence=max(0.0, min(1.0, float(value.get("confidence", 0)))),
-            reason=str(value.get("reason", "JEV routing decision"))[:500],
+            confidence=confidence,
+            reason=reason,
             workflow_fingerprint=fingerprint,
             source="jev",
+            requires_confirmation=confidence < 0.8,
         )
 
     def _fallback(
