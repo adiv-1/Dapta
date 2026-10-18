@@ -317,6 +317,11 @@ class JobStore:
                     (now, job_id, attempt["stage"], attempt["round"]),
                 )
             resume_status = failed_event["from_status"]
+            if resume_status == "training":
+                # A failed worker no longer owns the training claim. Resume at
+                # the claimable state so the factory runner can start a fresh
+                # adapter_training attempt instead of treating it as active.
+                resume_status = "provisioning_gpu"
             connection.execute(
                 """
                 UPDATE jobs SET status=?, failure_code=NULL, failure_message=NULL, updated_at=?

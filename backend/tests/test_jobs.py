@@ -261,6 +261,34 @@ class JobTests(unittest.TestCase):
         self.assertEqual(retried["stage_attempts"][0]["status"], "interrupted")
         self.assertTrue(retried["events"][-1]["metadata"]["retry"])
 
+    def test_failed_training_retry_returns_to_claimable_gpu_stage(self):
+        job = self.store.create_job(
+            workflow="Train a reusable specialist on validated examples.",
+            idempotency_key="retry-training-001",
+        )
+        for status in (
+            "architecting",
+            "integrating",
+            "building_dataset",
+            "validating",
+            "awaiting_compute",
+            "provisioning_gpu",
+        ):
+            self.store.transition(job["job_id"], status)
+        self.store.claim_stage(
+            job["job_id"], "adapter_training", enter_status="training"
+        )
+        self.store.complete_stage(
+            job["job_id"], "adapter_training", status="failed"
+        )
+        self.store.fail(job["job_id"], code="RuntimeError", message="dtype mismatch")
+
+        retried = self.store.retry_failed(job["job_id"])
+
+        self.assertEqual(retried["status"], "provisioning_gpu")
+        self.assertIsNone(retried["failure_code"])
+        self.assertEqual(retried["stage_attempts"][-1]["status"], "interrupted")
+
 
 if __name__ == "__main__":
     unittest.main()
