@@ -1,18 +1,30 @@
+import * as Sentry from "@sentry/react";
 import type { Adapter, Benchmark, Job, RouteDecision, Run } from "./types";
 import { base44 } from "./base44Client";
+import { toProxyTrace } from "./tracing";
 
 const API_URL = import.meta.env.VITE_DAPTA_API_URL;
 
 type ProxyFile = { name: string; type: string; base64: string };
 
+// One client span per controller call; its trace continues in dapta-proxy, the controller and the Qwen worker.
+function traced<T>(method: string, path: string, run: () => Promise<T>): Promise<T> {
+  const route = path.split("?")[0].replace(/\/[0-9a-f-]{8,}(?=\/|$)/gi, "/{id}");
+  return Sentry.startSpan({ name: `${method} ${route}`, op: "dapta.api" }, run);
+}
+
 async function invokeProxy<T>(payload: Record<string, unknown>): Promise<T> {
-  try {
-    const response = await base44.functions.invoke("dapta-proxy", payload);
-    return response.data as T;
-  } catch (reason) {
-    const error = reason as { response?: { data?: { detail?: string } }; message?: string };
-    throw new Error(error.response?.data?.detail || error.message || "Dapta request failed");
-  }
+  const method = String(payload.method || "GET");
+  return traced(method, String(payload.path), async () => {
+    const trace = toProxyTrace(Sentry.getTraceData());
+    try {
+      const response = await base44.functions.invoke("dapta-proxy", trace ? { ...payload, trace } : payload);
+      return response.data as T;
+    } catch (reason) {
+      const error = reason as { response?: { data?: { detail?: string } }; message?: string };
+      throw new Error(error.response?.data?.detail || error.message || "Dapta request failed");
+    }
+  });
 }
 
 async function encodeFile(file: File): Promise<ProxyFile> {
@@ -26,18 +38,21 @@ async function encodeFile(file: File): Promise<ProxyFile> {
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (API_URL) {
-    const response = await fetch(`${API_URL}${path}`, {
-      ...init,
-      headers: {
-        ...(init?.body instanceof FormData ? {} : { "Content-Type": "application/json" }),
-        ...(init?.headers || {}),
-      },
+    // Same-origin in local development: Sentry's fetch instrumentation adds the trace headers.
+    return traced(init?.method || "GET", path, async () => {
+      const response = await fetch(`${API_URL}${path}`, {
+        ...init,
+        headers: {
+          ...(init?.body instanceof FormData ? {} : { "Content-Type": "application/json" }),
+          ...(init?.headers || {}),
+        },
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({ detail: response.statusText }));
+        throw new Error(payload.detail || `Request failed: ${response.status}`);
+      }
+      return response.json();
     });
-    if (!response.ok) {
-      const payload = await response.json().catch(() => ({ detail: response.statusText }));
-      throw new Error(payload.detail || `Request failed: ${response.status}`);
-    }
-    return response.json();
   }
 
   const method = init?.method || "GET";

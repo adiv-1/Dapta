@@ -69,6 +69,8 @@ def create_app(database_path: Path | str | None = None) -> FastAPI:
     store = JobStore(path)
     ledger = UsageLedger(path)
     comparison_store = ComparisonStore(path)
+    # This process owns all comparison threads: anything still in flight belonged to a previous one.
+    comparison_store.recover_interrupted()
     agents = _factory_agents(ledger)
     openrouter = _openrouter(ledger)
     qwen = QwenGateway(url=settings.qwen_url, token=settings.qwen_api_token) if settings.qwen_url else None

@@ -3,13 +3,14 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import time
 import urllib.error
 import urllib.request
 from dataclasses import asdict, dataclass
 from difflib import SequenceMatcher
 from typing import Any, Iterable, Mapping
 
-from .observability import span
+from .observability import ai_agent, ai_chat, error_category, log_event, mark_failed, record_ai_usage
 
 
 @dataclass(frozen=True)
@@ -38,13 +39,28 @@ class WorkflowRouter:
             raise ValueError("workflow is required")
         fingerprint = hashlib.sha256(workflow.encode("utf-8")).hexdigest()
         adapter_list = list(adapters)
-        with span("router.classify", "JEV workflow route", **{"dapta.workflow_hash": fingerprint}):
+        with ai_agent("jev_router", system="jev", model=self.model, **{
+            "dapta.workflow_hash": fingerprint, "dapta.adapter_candidates": len(adapter_list),
+        }) as telemetry:
+            started = time.monotonic()
+            fallback_reason = "jev_not_configured"
+            decision: RouteDecision | None = None
             if self.api_key:
                 try:
-                    return self._jev(workflow, adapter_list, fingerprint)
-                except Exception:
-                    pass
-            return self._fallback(workflow, adapter_list, fingerprint)
+                    decision = self._jev(workflow, adapter_list, fingerprint)
+                except Exception as error:
+                    # Routing still succeeds through the registry fallback; the JEV failure is recorded.
+                    fallback_reason = f"jev_failed:{error_category(error)}"
+                    log_event("router_fallback", level="warning", model=self.model,
+                              error_category=error_category(error), workflow_hash=fingerprint)
+            if decision is None:
+                decision = self._fallback(workflow, adapter_list, fingerprint)
+            _record_route(telemetry, decision, adapter_list, fallback_reason if decision.source != "jev" else None)
+            log_event("route_decided", decision=decision.decision, adapter=decision.adapter_id,
+                      source=decision.source, confidence=round(decision.confidence, 3),
+                      fallback_reason=fallback_reason if decision.source != "jev" else None,
+                      duration_ms=round((time.monotonic() - started) * 1000), workflow_hash=fingerprint)
+            return decision
 
     def _jev(
         self, workflow: str, adapters: list[Mapping[str, Any]], fingerprint: str
@@ -74,11 +90,22 @@ class WorkflowRouter:
             method="POST",
             headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
         )
-        try:
-            with urllib.request.urlopen(request, timeout=30) as response:
-                result = json.loads(response.read().decode("utf-8"))
-        except (urllib.error.URLError, urllib.error.HTTPError, json.JSONDecodeError) as error:
-            raise RuntimeError("JEV routing failed") from error
+        with ai_chat(self.model, system="jev", agent="jev_router", **{"gen_ai.request.temperature": 0}) as call:
+            try:
+                with urllib.request.urlopen(request, timeout=30) as response:
+                    result = json.loads(response.read().decode("utf-8"))
+            except (urllib.error.URLError, urllib.error.HTTPError, json.JSONDecodeError) as error:
+                mark_failed(call, error)
+                raise RuntimeError("JEV routing failed") from error
+            usage = result.get("usage") if isinstance(result.get("usage"), Mapping) else {}
+            record_ai_usage(call, {
+                "input_tokens": usage.get("prompt_tokens", usage.get("input_tokens")),
+                "output_tokens": usage.get("completion_tokens", usage.get("output_tokens")),
+                "total_tokens": usage.get("total_tokens"),
+                "cost_usd": usage.get("cost"),
+                "cost_source": "provider_reported" if usage.get("cost") is not None else "none",
+                "response_model": result.get("model"),
+            })
         content = result["choices"][0]["message"]["content"]
         value = json.loads(content) if isinstance(content, str) else content
         decision = str(value.get("decision", "create_adapter"))
@@ -124,3 +151,23 @@ class WorkflowRouter:
         return RouteDecision(
             "create_adapter", None, max(0.0, 1 - best[0]), best[2], fingerprint, "registry_fallback", True
         )
+
+
+def _record_route(telemetry: Any, decision: RouteDecision, adapters: list[Mapping[str, Any]],
+                  fallback_reason: str | None) -> None:
+    if telemetry is None:
+        return
+    selected = next((item for item in adapters if item.get("adapter_id") == decision.adapter_id), None)
+    for key, value in {
+        "dapta.route.decision": decision.decision,
+        "dapta.route.source": decision.source,
+        "dapta.route.confidence": round(decision.confidence, 4),
+        "dapta.route.requires_confirmation": decision.requires_confirmation,
+        "dapta.route.fallback": decision.source != "jev",
+        "dapta.route.fallback_reason": fallback_reason,
+        "dapta.adapter_id": decision.adapter_id,
+        "dapta.adapter_version": selected.get("version") if selected else None,
+        "dapta.base_model": selected.get("base_model") if selected else None,
+    }.items():
+        if value is not None:
+            telemetry.set_data(key, value)

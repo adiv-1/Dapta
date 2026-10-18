@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextvars
 import json
 import sqlite3
 import threading
@@ -16,7 +17,10 @@ from typing import Any, Callable, Iterator, Mapping
 
 from .config import Settings
 from .ledger import UsageLedger
-from .observability import span
+from .observability import (
+    ai_agent, ai_chat, capture_exception, continued_transaction, error_category, log_event, mark_failed,
+    record_ai_usage, span, trace_headers,
+)
 from .openrouter import OpenRouterClient
 
 
@@ -101,6 +105,23 @@ class ComparisonStore:
                 ).fetchall()
             ]
         return [self.get(run_id) for run_id in ids]
+
+    def recover_interrupted(self) -> int:
+        """Fail runs left queued/running by a previous controller process.
+
+        Comparisons run in a thread of the controller; after a restart nothing can finish them, and
+        the frontend would poll a "running" comparison forever. Call once at controller startup.
+        """
+        with self._connect() as connection:
+            ids = [row["run_id"] for row in connection.execute(
+                "SELECT run_id FROM comparison_runs WHERE status NOT IN ('completed', 'failed')"
+            ).fetchall()]
+        for run_id in ids:
+            self.update(run_id, status="failed",
+                        error_message="Interrupted: the controller restarted before this comparison finished.")
+            log_event("comparison_interrupted", level="warning", run_id=run_id,
+                      error_category="controller_restart")
+        return len(ids)
 
     def put_benchmark(self, benchmark_id: str, payload: Mapping[str, Any]) -> None:
         now = _now()
@@ -230,7 +251,7 @@ class QwenGateway:
     def generate(
         self, *, run_id: str, workflow: str, document_text: str, adapter_id: str
     ) -> dict[str, Any]:
-        headers = {"Content-Type": "application/json"}
+        headers = {"Content-Type": "application/json", **trace_headers()}
         if self.token:
             headers["Authorization"] = f"Bearer {self.token}"
         request = urllib.request.Request(
@@ -296,20 +317,43 @@ class ComparisonService:
         except Exception:
             pass
         callback = background or _start_thread
-        callback(self.execute, run["run_id"], workflow, document_text, dict(adapter))
+        callback(self.execute, run["run_id"], workflow, document_text, dict(adapter), trace_headers())
+        log_event("comparison_started", run_id=run["run_id"], adapter=str(adapter["adapter_id"]),
+                  adapter_version=adapter.get("version"))
         return run
 
     def execute(
-        self, run_id: str, workflow: str, document_text: str, adapter: Mapping[str, Any]
+        self,
+        run_id: str,
+        workflow: str,
+        document_text: str,
+        adapter: Mapping[str, Any],
+        trace: Mapping[str, str] | None = None,
     ) -> None:
         self.store.update(run_id, status="running")
         try:
-            with span("dapta.comparison", "Dapta model comparison", **{"gen_ai.conversation.id": run_id}):
+            # Runs in its own thread: continue the request's trace instead of starting an orphan span.
+            with continued_transaction(trace, op="dapta.comparison", name="Dapta model comparison",
+                                       **{"gen_ai.conversation.id": run_id, "dapta.run_id": run_id,
+                                          "dapta.adapter_id": adapter.get("adapter_id"),
+                                          "dapta.adapter_version": adapter.get("version")}) as comparison:
+                started = time.perf_counter()
                 conditions = self._run_conditions(run_id, workflow, document_text, adapter)
                 summary = _summarize(conditions)
-            self.store.update(run_id, status="completed", results=conditions, summary=summary)
-            self.ledger.record_run_event(run_id=run_id, stage="compare", status="completed")
+                completed = [name for name, value in conditions.items() if value.get("status") == "completed"]
+                if comparison is not None:
+                    comparison.set_data("dapta.conditions.completed", len(completed))
+                    comparison.set_data("dapta.conditions.failed", len(conditions) - len(completed))
+                    comparison.set_data("dapta.best_overall", summary.get("best_overall"))
+                with span("db.sql.write", "Persist comparison results", **{"dapta.run_id": run_id}):
+                    self.store.update(run_id, status="completed", results=conditions, summary=summary)
+                    self.ledger.record_run_event(run_id=run_id, stage="compare", status="completed")
+                log_event("comparison_completed", run_id=run_id, duration_ms=round((time.perf_counter() - started) * 1000),
+                          conditions_completed=len(completed), conditions_failed=len(conditions) - len(completed),
+                          best_overall=summary.get("best_overall"))
         except Exception as error:
+            capture_exception(error, run_id=run_id, stage="compare")
+            log_event("comparison_failed", level="error", run_id=run_id, error_category=error_category(error))
             self.store.update(run_id, status="failed", error_message=str(error)[:500])
             self.ledger.record_run_event(
                 run_id=run_id,
@@ -336,12 +380,18 @@ class ComparisonService:
         }
         results: dict[str, Any] = {}
         with ThreadPoolExecutor(max_workers=3) as pool:
-            futures = {pool.submit(call): name for name, call in calls.items()}
+            futures = {pool.submit(contextvars.copy_context().run, call): name for name, call in calls.items()}
             for future in as_completed(futures):
                 name = futures[future]
                 try:
                     results[name] = future.result()
                 except Exception as error:
+                    # One condition failing is a result, not a crash: the run still completes,
+                    # but Sentry gets the failure with its condition, model and category.
+                    capture_exception(error, run_id=run_id, condition=name, model=_model_for(name, self.settings),
+                                      stage="compare")
+                    log_event("condition_failed", level="warning", run_id=run_id, condition=name,
+                              model=_model_for(name, self.settings), error_category=error_category(error))
                     results[name] = {
                         "status": "failed",
                         "model": _model_for(name, self.settings),
@@ -360,13 +410,35 @@ class ComparisonService:
             raise RuntimeError("DAPTA_QWEN_URL is not configured")
         started_at = _now()
         started = time.perf_counter()
-        with span("gen_ai.invoke_agent", "Qwen LoRA", **{"gen_ai.request.model": self.settings.qwen_model}):
-            response = self.qwen.generate(
-                run_id=run_id,
-                workflow=workflow,
-                document_text=document_text,
-                adapter_id=str(adapter["adapter_id"]),
-            )
+        adapter_fields = {"dapta.run_id": run_id, "dapta.condition": "qwen_lora",
+                          "dapta.adapter_id": str(adapter["adapter_id"]), "dapta.adapter_version": adapter.get("version")}
+        with ai_agent("qwen_lora", system="dapta-qwen", model=self.settings.qwen_model, **adapter_fields) as agent, \
+                ai_chat(self.settings.qwen_model, system="dapta-qwen", agent="qwen_lora", **adapter_fields) as call:
+            try:
+                response = self.qwen.generate(
+                    run_id=run_id,
+                    workflow=workflow,
+                    document_text=document_text,
+                    adapter_id=str(adapter["adapter_id"]),
+                )
+            except Exception as error:
+                mark_failed(call, error, retry_count=0)
+                mark_failed(agent, error)
+                raise
+            duration_ms = round((time.perf_counter() - started) * 1000)
+            # Worker-reported counts only; a missing count stays missing in Sentry.
+            record_ai_usage(call, {
+                "input_tokens": response.get("input_tokens"), "output_tokens": response.get("output_tokens"),
+                "total_tokens": (response["input_tokens"] + response["output_tokens"])
+                if isinstance(response.get("input_tokens"), int) and isinstance(response.get("output_tokens"), int) else None,
+                "cost_usd": Decimal(self.settings.hostinger_hourly_cost_usd) * Decimal(duration_ms) / Decimal(3_600_000),
+                "cost_source": "calculated", "response_model": self.settings.qwen_model,
+            })
+            if call is not None:
+                call.set_data("dapta.retry_count", 0)
+                for key in ("latency_ms", "ttft_ms"):
+                    if response.get(key) is not None:
+                        call.set_data(f"dapta.worker.{key}", response[key])
         duration_ms = round((time.perf_counter() - started) * 1000)
         completed_at = _now()
         gpu_cost = Decimal(self.settings.hostinger_hourly_cost_usd) * Decimal(duration_ms) / Decimal(3_600_000)
@@ -410,19 +482,26 @@ class ComparisonService:
         if self.openrouter is None:
             raise RuntimeError("OPENROUTER_API_KEY is not configured")
         started = time.perf_counter()
-        output = self.openrouter.complete_json(
-            run_id=run_id,
-            stage="compare",
-            agent_role=condition,
-            condition=condition,
-            model=model,
-            messages=[
-                {"role": "system", "content": skill + "\nReturn valid JSON only."},
-                {"role": "user", "content": document_text},
-            ],
-            max_tokens=3000,
-            reasoning_effort=reasoning_effort,
-        )
+        with ai_agent(condition, system="openrouter", model=model, **{
+            "dapta.run_id": run_id, "dapta.condition": condition,
+        }) as agent:
+            try:
+                output = self.openrouter.complete_json(
+                    run_id=run_id,
+                    stage="compare",
+                    agent_role=condition,
+                    condition=condition,
+                    model=model,
+                    messages=[
+                        {"role": "system", "content": skill + "\nReturn valid JSON only."},
+                        {"role": "user", "content": document_text},
+                    ],
+                    max_tokens=3000,
+                    reasoning_effort=reasoning_effort,
+                )
+            except Exception as error:
+                mark_failed(agent, error)
+                raise
         duration_ms = round((time.perf_counter() - started) * 1000)
         summary = self.ledger.run_summary(run_id)
         condition_usage = next(

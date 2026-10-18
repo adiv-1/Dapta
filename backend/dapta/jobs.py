@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
+import time
 import uuid
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -10,7 +11,7 @@ from pathlib import Path
 from typing import Any, Callable, Iterator, Mapping, Protocol
 
 from .ledger import UsageLedger
-from .observability import span
+from .observability import FactoryStage, emit_job_root, error_category, log_event, span
 
 
 SCHEMA_VERSION = 2
@@ -223,7 +224,8 @@ class JobStore:
         metadata: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:
         with self._connect(immediate=True) as connection:
-            _apply_transition(connection, job_id, to_status, _timestamp(occurred_at), _json(metadata))
+            previous = _apply_transition(connection, job_id, to_status, _timestamp(occurred_at), _json(metadata))
+        _log_transition(job_id, previous, to_status)
         return self.get_job(job_id)
 
     def record_progress(self, job_id: str, progress: Mapping[str, Any]) -> None:
@@ -277,6 +279,8 @@ class JobStore:
                     """,
                     (str(uuid.uuid4()), job_id, from_status, now, _json({"code": code})),
                 )
+        if not already_failed:
+            _log_transition(job_id, from_status, "failed")
         return self.get_job(job_id)
 
     def retry_failed(self, job_id: str) -> dict[str, Any]:
@@ -426,8 +430,8 @@ class JobStore:
                     """,
                     (job_id, _required(stage, "stage"), _round(round), now),
                 )
-                if enter_status:
-                    _apply_transition(connection, job_id, enter_status, now, _json({"round": round}))
+                previous = (_apply_transition(connection, job_id, enter_status, now, _json({"round": round}))
+                            if enter_status else None)
         except sqlite3.IntegrityError as error:
             with self._connect(immediate=True) as connection:
                 attempt = connection.execute(
@@ -449,10 +453,9 @@ class JobStore:
                     """,
                     (now, job_id, stage, _round(round)),
                 )
-                if enter_status:
-                    _apply_transition(
-                        connection, job_id, enter_status, now, _json({"round": round})
-                    )
+                previous = (_apply_transition(connection, job_id, enter_status, now, _json({"round": round}))
+                            if enter_status else None)
+        _log_transition(job_id, previous, enter_status)
 
     def recover_interrupted_stages(self) -> int:
         """Release stage claims abandoned when the single controller was replaced."""
@@ -508,8 +511,9 @@ class JobStore:
             )
             if cursor.rowcount != 1:
                 raise JobConflict(f"stage is not running: {stage}")
-            if next_status:
-                _apply_transition(connection, job_id, next_status, now, _json(metadata))
+            previous = (_apply_transition(connection, job_id, next_status, now, _json(metadata))
+                        if next_status else None)
+        _log_transition(job_id, previous, next_status)
 
     def register_adapter(
         self, *, adapter_id: str, skill_id: str, version: str, base_model: str,
@@ -651,6 +655,9 @@ class AdapterJobOrchestrator:
             skill_id=job["skill_id"], started_at=job["created_at"],
             metadata={"workflow_hash": job["workflow_hash"]},
         )
+        if len(job["events"]) == 1:  # newly created, not an idempotent replay
+            emit_job_root(job["job_id"], skill_id=job["skill_id"], route_decision=(route_decision or {}).get("decision"))
+            log_event("job_created", job_id=job["job_id"], skill_id=job["skill_id"], next_stage=job["status"])
         return job
 
     def advance(self, job_id: str) -> dict[str, Any]:
@@ -758,15 +765,21 @@ class AdapterJobOrchestrator:
         round = job["dataset_round"]
         if self.trainer is None:
             raise JobBlocked("awaiting_compute: training backend is not configured")
-        with span("compute.preflight", "Authorize adapter compute", job_id=job_id, round=round):
-            self.trainer.preflight(
-                job=job, round=round,
-                dataset=self.store.get_artifact(job_id, _round_name("dataset.json", round)),
-                integration=self.store.get_artifact(job_id, "integration.json"),
-            )
-        return self.store.transition(job_id, "provisioning_gpu", metadata={
-            "round": round, "budget_checked": True,
-        })
+        with FactoryStage(job_id, "compute_authorization", round=round, op="dapta.factory.stage",
+                          name="factory compute_authorization") as telemetry:
+            try:
+                with span("compute.preflight", "Authorize adapter compute", job_id=job_id, round=round):
+                    self.trainer.preflight(
+                        job=job, round=round,
+                        dataset=self.store.get_artifact(job_id, _round_name("dataset.json", round)),
+                        integration=self.store.get_artifact(job_id, "integration.json"),
+                    )
+            except JobBlocked as blocked:
+                log_event("stage_blocked", level="warning", **telemetry.fields, reason=str(blocked)[:200])
+                raise
+            return self.store.transition(job_id, "provisioning_gpu", metadata={
+                "round": round, "budget_checked": True,
+            })
 
     def train(self, job_id: str) -> dict[str, Any]:
         job = self._require(job_id, {"provisioning_gpu"})
@@ -853,43 +866,51 @@ class AdapterJobOrchestrator:
         self, job_id: str, stage: str, round: int, work: Callable[[], str],
         *, enter_status: str | None = None,
     ) -> dict[str, Any]:
-        self.store.claim_stage(job_id, stage, round=round, enter_status=enter_status)
-        self.ledger.record_run_event(
-            run_id=job_id, stage=stage, status="started", metadata={"round": round},
-        )
-        try:
-            operation = {
-                "skill_architect": "gen_ai.skill_architect",
-                "skill_integration": "agent.devin.integrate",
-                "data_builder": "gen_ai.data_builder",
-                "dataset_validator": "dataset.validate",
-                "adapter_training": "model.train_qlora",
-                "independent_evaluator": "model.evaluate",
-                "registry_publish": "registry.publish",
-            }.get(stage, f"dapta.{stage}")
-            with span(
-                operation, stage.replace("_", " ").title(),
-                job_id=job_id, round=round,
-            ):
-                next_status = work()
-            self.store.complete_stage(
-                job_id, stage, status="completed", round=round, next_status=next_status,
-                metadata={"round": round},
-            )
+        operation = {
+            "skill_architect": "gen_ai.skill_architect",
+            "skill_integration": "agent.devin.integrate",
+            "data_builder": "gen_ai.data_builder",
+            "dataset_validator": "dataset.validate",
+            "adapter_training": "model.train_qlora",
+            "independent_evaluator": "model.evaluate",
+            "registry_publish": "registry.publish",
+        }.get(stage, f"dapta.{stage}")
+        with FactoryStage(job_id, stage, round=round, op="dapta.factory.stage", name=f"factory {stage}") as telemetry:
+            with span("db.sql.transaction", "claim stage", **telemetry.fields):
+                self.store.claim_stage(job_id, stage, round=round, enter_status=enter_status)
             self.ledger.record_run_event(
-                run_id=job_id, stage=stage, status="completed",
-                metadata={"round": round, "next_status": next_status},
+                run_id=job_id, stage=stage, status="started", metadata={"round": round},
             )
-            return self.store.get_job(job_id)
-        except Exception as error:
-            _finish_attempt(self.store, job_id, stage, round)
-            if not isinstance(error, JobBlocked):
-                self.store.fail(job_id, code=type(error).__name__, message=str(error) or repr(error))
+            log_event("stage_started", **telemetry.fields)
+            started = time.monotonic()
+            try:
+                with span(operation, stage.replace("_", " ").title(), job_id=job_id, round=round):
+                    next_status = work()
+                with span("db.sql.transaction", "complete stage", **telemetry.fields):
+                    self.store.complete_stage(
+                        job_id, stage, status="completed", round=round, next_status=next_status,
+                        metadata={"round": round},
+                    )
                 self.ledger.record_run_event(
-                    run_id=job_id, stage=stage, status="failed",
-                    metadata={"round": round, "error_type": type(error).__name__},
+                    run_id=job_id, stage=stage, status="completed",
+                    metadata={"round": round, "next_status": next_status},
                 )
-            raise
+                log_event("stage_completed", **telemetry.fields, next_stage=next_status,
+                          duration_ms=round_ms(started))
+                return self.store.get_job(job_id)
+            except Exception as error:
+                _finish_attempt(self.store, job_id, stage, round)
+                if isinstance(error, JobBlocked):
+                    log_event("stage_blocked", level="warning", **telemetry.fields, reason=str(error)[:200])
+                else:
+                    self.store.fail(job_id, code=type(error).__name__, message=str(error) or repr(error))
+                    self.ledger.record_run_event(
+                        run_id=job_id, stage=stage, status="failed",
+                        metadata={"round": round, "error_type": type(error).__name__},
+                    )
+                    log_event("stage_failed", level="error", **telemetry.fields, duration_ms=round_ms(started),
+                              error_category=error_category(error), error_type=type(error).__name__)
+                raise
 
     def _qualitative(self, job_id: str, report: Mapping[str, Any]) -> dict[str, Any]:
         try:
@@ -933,7 +954,8 @@ class AdapterJobOrchestrator:
 
 def _apply_transition(
     connection: sqlite3.Connection, job_id: str, to_status: str, now: str, metadata: str,
-) -> None:
+) -> str | None:
+    """Move the job; returns the previous status, or None when it was already there."""
     if to_status not in JOB_STAGES:
         raise ValueError(f"unknown job stage: {to_status}")
     current = connection.execute("SELECT status FROM jobs WHERE job_id=?", (job_id,)).fetchone()
@@ -941,7 +963,7 @@ def _apply_transition(
         raise JobNotFound(job_id)
     from_status = current["status"]
     if from_status == to_status:
-        return
+        return None
     if to_status not in ALLOWED_TRANSITIONS[from_status]:
         raise InvalidTransition(f"cannot move job from {from_status} to {to_status}")
     connection.execute("UPDATE jobs SET status=?, updated_at=? WHERE job_id=?", (to_status, now, job_id))
@@ -952,6 +974,12 @@ def _apply_transition(
         """,
         (str(uuid.uuid4()), job_id, from_status, to_status, now, metadata),
     )
+    return from_status
+
+
+def _log_transition(job_id: str, previous: str | None, next_stage: str | None) -> None:
+    if previous and next_stage:
+        log_event("stage_transitioned", job_id=job_id, previous_stage=previous, next_stage=next_stage)
 
 
 def _migrate_stage_attempts(connection: sqlite3.Connection) -> None:
@@ -976,6 +1004,10 @@ def _migrate_stage_attempts(connection: sqlite3.Connection) -> None:
         """,
     )
     connection.execute("DROP TABLE job_stage_attempts_v1")
+
+
+def round_ms(started: float) -> int:
+    return round((time.monotonic() - started) * 1000)
 
 
 def _finish_attempt(store: JobStore, job_id: str, stage: str, round: int) -> None:

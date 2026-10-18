@@ -7,7 +7,12 @@ type RequestPayload = {
   body?: unknown;
   idempotencyKey?: string | null;
   file?: { name: string; type?: string; base64: string };
+  // Sentry trace context from the browser (the cross-origin invoke cannot carry trace headers).
+  trace?: { sentry_trace?: string; baggage?: string };
 };
+
+const SENTRY_TRACE = /^[0-9a-f]{32}-[0-9a-f]{16}(-[01])?$/;
+const BAGGAGE_MEMBER = /^sentry-[A-Za-z0-9_.-]+=[^,;\s]*$/;
 
 const ndaAdapter = {
   adapter_id: "nda-intake/qwen3-vl-8b-v1",
@@ -73,6 +78,7 @@ export default async function (request: Request): Promise<Response> {
 
   const headers = new Headers({ "X-Dapta-Token": controllerToken });
   if (payload.idempotencyKey) headers.set("Idempotency-Key", payload.idempotencyKey);
+  for (const [name, value] of Object.entries(traceHeaders(payload.trace, request.headers))) headers.set(name, value);
   let body: BodyInit | undefined;
 
   if (payload.file) {
@@ -98,6 +104,18 @@ export default async function (request: Request): Promise<Response> {
     }
   }
   return Response.json(result, { status: upstream.status });
+}
+
+// Continue the browser's trace in the controller. Only well-formed sentry-trace values and
+// sentry- baggage members are forwarded; anything else is dropped rather than passed upstream.
+function traceHeaders(trace: RequestPayload["trace"], incoming: Headers): Record<string, string> {
+  const sentryTrace = trace?.sentry_trace ?? incoming.get("sentry-trace") ?? "";
+  if (!SENTRY_TRACE.test(sentryTrace)) return {};
+  const rawBaggage = trace?.baggage ?? incoming.get("baggage") ?? "";
+  const baggage = rawBaggage.length <= 8192
+    ? rawBaggage.split(",").map((member) => member.trim()).filter((member) => BAGGAGE_MEMBER.test(member)).join(",")
+    : "";
+  return baggage ? { "sentry-trace": sentryTrace, baggage } : { "sentry-trace": sentryTrace };
 }
 
 function registryFallback(path: string, method: string): unknown | undefined {

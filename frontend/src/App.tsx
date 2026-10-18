@@ -249,7 +249,7 @@ const factoryStages = [
   { key: "publishing", label: "Hugging Face Registry", detail: "Weights, metrics, manifest", icon: UploadCloud },
 ] as const;
 
-function Registry({ adapters, jobs, selectedJob, setSelectedJob, onTest, onRetry }: {
+export function Registry({ adapters, jobs, selectedJob, setSelectedJob, onTest, onRetry }: {
   adapters: Adapter[]; jobs: Job[]; selectedJob?: string;
   setSelectedJob: (id: string) => void; onTest: (adapter?: Adapter) => void;
   onRetry: (jobId: string) => Promise<void>;
@@ -425,7 +425,10 @@ function AgentOutputPanel({ job }: { job: Job }) {
     setSelected(Math.max(0, outputs.length - 1));
   }, [job.job_id, outputs.length]);
 
-  const current = outputs[selected];
+  // The effect above corrects `selected` only after this render; clamp so a job with fewer outputs
+  // (another job selected, or a newer job taking over the list) never reads past the end.
+  const shown = Math.min(selected, outputs.length - 1);
+  const current = outputs[shown];
   return (
     <aside className="agent-output-panel">
       <div className="agent-output-head">
@@ -437,7 +440,7 @@ function AgentOutputPanel({ job }: { job: Job }) {
           <div className="agent-output-tabs">
             {outputs.map((output, index) => (
               <button
-                className={index === selected ? "active" : ""}
+                className={index === shown ? "active" : ""}
                 key={`${output.stage}-${index}`}
                 onClick={() => setSelected(index)}
               >

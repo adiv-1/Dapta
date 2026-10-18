@@ -11,7 +11,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Callable, Mapping, Protocol
 
-from .ledger import UsageLedger
+from .ledger import UsageLedger, openrouter_usage
+from .observability import ai_agent, ai_chat, log_event, mark_failed, record_ai_usage
 
 
 class OpenRouterError(RuntimeError):
@@ -92,78 +93,98 @@ class OpenRouterClient:
         condition: str | None = None,
         reasoning_effort: str | None = None,
     ) -> dict[str, Any]:
-        call_id = str(uuid.uuid4())
-        started_at = _now()
-        started_clock = time.monotonic()
-        response: dict[str, Any] | None = None
-        try:
-            payload: dict[str, Any] = {
-                "model": model,
-                "messages": messages,
-                "temperature": temperature,
-                "response_format": {"type": "json_object"},
-                "usage": {"include": True},
-                "user": run_id,
-                "trace": {
-                    "trace_id": run_id,
-                    "trace_name": "dapta.adapter_build",
-                    "span_name": f"gen_ai.{agent_role}",
-                    "generation_name": agent_role,
-                },
-            }
-            if max_tokens is not None:
-                payload["max_tokens"] = max_tokens
-            if reasoning_effort:
-                payload["reasoning"] = {"effort": reasoning_effort}
-            response = self.transport.request(
-                "POST",
-                f"{self.base_url}/chat/completions",
-                headers=self._headers(),
-                payload=payload,
-            )
-            completed_at = _now()
-            duration_ms = round((time.monotonic() - started_clock) * 1000)
-            generation, reconciled = self._generation_metadata(response.get("id"))
-            self.ledger.record_openrouter_call(
-                call_id=call_id,
-                run_id=run_id,
-                stage=stage,
-                agent_role=agent_role,
-                benchmark_case_id=benchmark_case_id,
-                condition=condition or agent_role,
-                requested_model=model,
-                started_at=started_at,
-                completed_at=completed_at,
-                duration_ms=duration_ms,
-                response=response,
-                generation=generation,
-                metadata={
-                    "generation_reconciled": reconciled,
-                    "reasoning_effort": reasoning_effort,
-                },
-            )
-            return _response_json(response)
-        except Exception as error:
-            completed_at = _now()
-            duration_ms = round((time.monotonic() - started_clock) * 1000)
-            if response is None:
-                self.ledger.record_model_call(
+        with ai_chat(model, system="openrouter", agent=agent_role, **{
+            "dapta.run_id": run_id, "dapta.stage": stage, "dapta.condition": condition or agent_role,
+            "gen_ai.request.max_tokens": max_tokens, "gen_ai.request.temperature": temperature,
+            "dapta.reasoning_effort": reasoning_effort,
+            # One completion request per call; generation lookups are bookkeeping, not retries.
+            "dapta.retry_count": 0,
+        }) as telemetry:
+            call_id = str(uuid.uuid4())
+            started_at = _now()
+            started_clock = time.monotonic()
+            response: dict[str, Any] | None = None
+            try:
+                payload: dict[str, Any] = {
+                    "model": model,
+                    "messages": messages,
+                    "temperature": temperature,
+                    "response_format": {"type": "json_object"},
+                    "usage": {"include": True},
+                    "user": run_id,
+                    "trace": {
+                        "trace_id": run_id,
+                        "trace_name": "dapta.adapter_build",
+                        "span_name": f"gen_ai.{agent_role}",
+                        "generation_name": agent_role,
+                    },
+                }
+                if max_tokens is not None:
+                    payload["max_tokens"] = max_tokens
+                if reasoning_effort:
+                    payload["reasoning"] = {"effort": reasoning_effort}
+                response = self.transport.request(
+                    "POST",
+                    f"{self.base_url}/chat/completions",
+                    headers=self._headers(),
+                    payload=payload,
+                )
+                completed_at = _now()
+                duration_ms = round((time.monotonic() - started_clock) * 1000)
+                generation, reconciled = self._generation_metadata(response.get("id"))
+                self.ledger.record_openrouter_call(
                     call_id=call_id,
                     run_id=run_id,
                     stage=stage,
                     agent_role=agent_role,
                     benchmark_case_id=benchmark_case_id,
                     condition=condition or agent_role,
-                    provider="openrouter",
                     requested_model=model,
                     started_at=started_at,
                     completed_at=completed_at,
                     duration_ms=duration_ms,
-                    status="failed",
-                    error_code=type(error).__name__,
-                    metadata={"generation_reconciled": False},
+                    response=response,
+                    generation=generation,
+                    metadata={
+                        "generation_reconciled": reconciled,
+                        "reasoning_effort": reasoning_effort,
+                    },
                 )
-            raise
+                usage = openrouter_usage(response, generation)
+                record_ai_usage(telemetry, usage)
+                if telemetry is not None:
+                    telemetry.set_data("dapta.generation_reconciled", reconciled)
+                    if usage["finish_reason"]:
+                        telemetry.set_data("gen_ai.response.finish_reasons", str(usage["finish_reason"]))
+                result = _response_json(response)
+                log_event("model_call_completed", run_id=run_id, stage=stage, model=model, agent=agent_role,
+                          duration_ms=duration_ms, input_tokens=usage["input_tokens"],
+                          output_tokens=usage["output_tokens"], cost_source=usage["cost_source"], retry_count=0)
+                return result
+            except Exception as error:
+                completed_at = _now()
+                duration_ms = round((time.monotonic() - started_clock) * 1000)
+                if response is None:
+                    self.ledger.record_model_call(
+                        call_id=call_id,
+                        run_id=run_id,
+                        stage=stage,
+                        agent_role=agent_role,
+                        benchmark_case_id=benchmark_case_id,
+                        condition=condition or agent_role,
+                        provider="openrouter",
+                        requested_model=model,
+                        started_at=started_at,
+                        completed_at=completed_at,
+                        duration_ms=duration_ms,
+                        status="failed",
+                        error_code=type(error).__name__,
+                        metadata={"generation_reconciled": False},
+                    )
+                category = mark_failed(telemetry, error, retry_count=0, duration_ms=duration_ms)
+                log_event("model_call_failed", level="warning", run_id=run_id, stage=stage, model=model,
+                          agent=agent_role, duration_ms=duration_ms, error_category=category, retry_count=0)
+                raise
 
     def _generation_metadata(self, generation_id: Any) -> tuple[dict[str, Any], bool]:
         if not isinstance(generation_id, str) or not generation_id:
@@ -301,21 +322,24 @@ class FactoryAgents:
         reasoning_effort = None
         if definition.name == "data_builder":
             reasoning_effort = os.environ.get("OPENROUTER_DATA_BUILDER_REASONING_EFFORT")
-        return self.client.complete_json(
-            run_id=run_id,
-            stage=definition.stage,
-            agent_role=definition.name,
-            model=definition.model,
-            messages=[
-                {"role": "system", "content": definition.system_prompt},
-                {
-                    "role": "user",
-                    "content": json.dumps(payload, separators=(",", ":"), ensure_ascii=False),
-                },
-            ],
-            max_tokens=definition.max_tokens,
-            reasoning_effort=reasoning_effort,
-        )
+        with ai_agent(definition.name, system="openrouter", model=definition.model, **{
+            "dapta.run_id": run_id, "dapta.stage": definition.stage,
+        }):
+            return self.client.complete_json(
+                run_id=run_id,
+                stage=definition.stage,
+                agent_role=definition.name,
+                model=definition.model,
+                messages=[
+                    {"role": "system", "content": definition.system_prompt},
+                    {
+                        "role": "user",
+                        "content": json.dumps(payload, separators=(",", ":"), ensure_ascii=False),
+                    },
+                ],
+                max_tokens=definition.max_tokens,
+                reasoning_effort=reasoning_effort,
+            )
 
 
 def _response_json(response: Mapping[str, Any]) -> dict[str, Any]:

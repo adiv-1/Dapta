@@ -1,0 +1,44 @@
+// Lets Node load the Base44 Deno function (maps its npm:/base44: imports to local stubs) and the
+// React sources under src/ (TSX and Vite-style extensionless imports, compiled with Vite's esbuild).
+import { existsSync, readFileSync } from "node:fs";
+import { registerHooks } from "node:module";
+import { fileURLToPath } from "node:url";
+
+import { transformSync } from "esbuild";
+
+const stubs = {
+  "npm:@base44/sdk": new URL("./stubs/base44-sdk.mjs", import.meta.url).href,
+  "base44:runtime": new URL("./stubs/base44-runtime.mjs", import.meta.url).href,
+};
+const base44ClientStub = new URL("./stubs/base44-client.mjs", import.meta.url).href;
+const srcDir = new URL("../src/", import.meta.url).href;
+
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    if (stubs[specifier]) return { url: stubs[specifier], shortCircuit: true };
+    if (context.parentURL?.startsWith(srcDir) && specifier.startsWith(".") && !/\.[cm]?[jt]sx?$/.test(specifier)) {
+      for (const extension of [".ts", ".tsx"]) {
+        const url = new URL(specifier + extension, context.parentURL);
+        if (!existsSync(fileURLToPath(url))) continue;
+        if (url.href === new URL("base44Client.ts", srcDir).href) return { url: base44ClientStub, shortCircuit: true };
+        return { url: url.href, shortCircuit: true };
+      }
+    }
+    return nextResolve(specifier, context);
+  },
+  load(url, context, nextLoad) {
+    if (url.startsWith(srcDir) && /\.tsx?$/.test(url)) {
+      const { code } = transformSync(readFileSync(fileURLToPath(url), "utf8"), {
+        loader: url.endsWith(".tsx") ? "tsx" : "ts",
+        format: "esm",
+        jsx: "automatic",
+        sourcefile: fileURLToPath(url),
+        define: { "import.meta.env": "globalThis.__VITE_ENV__" },
+      });
+      return { format: "module", source: code, shortCircuit: true };
+    }
+    return nextLoad(url, context);
+  },
+});
+
+globalThis.__VITE_ENV__ ??= { MODE: "test" };

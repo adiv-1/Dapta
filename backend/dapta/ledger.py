@@ -232,38 +232,17 @@ class UsageLedger:
         ttft_ms: int | None = None,
         metadata: Mapping[str, Any] | None = None,
     ) -> str:
-        generation_data = dict(generation or {})
-        if "data" in generation_data and isinstance(generation_data["data"], Mapping):
-            generation_data = dict(generation_data["data"])
+        generation_data = _generation_data(generation)
         usage = dict(response.get("usage") or {})
-        prompt_details = dict(usage.get("prompt_tokens_details") or {})
-        completion_details = dict(usage.get("completion_tokens_details") or {})
-
-        prompt_tokens = _first_integer(
-            generation_data.get("native_tokens_prompt"),
-            usage.get("prompt_tokens"),
-            usage.get("input_tokens"),
-        )
-        completion_tokens = _first_integer(
-            generation_data.get("native_tokens_completion"),
-            usage.get("completion_tokens"),
-            usage.get("output_tokens"),
-        )
-        reasoning_tokens = _first_integer(
-            generation_data.get("native_tokens_reasoning"),
-            completion_details.get("reasoning_tokens"),
-        )
-        cached_tokens = _first_integer(
-            generation_data.get("native_tokens_cached"),
-            prompt_details.get("cached_tokens"),
-            dict(usage.get("input_tokens_details") or {}).get("cached_tokens"),
-        )
-        cache_write_tokens = _first_integer(prompt_details.get("cache_write_tokens"))
+        reported = openrouter_usage(response, generation)
+        prompt_tokens = reported["input_tokens"] or 0
+        completion_tokens = reported["output_tokens"] or 0
+        reasoning_tokens = reported["reasoning_tokens"] or 0
+        cached_tokens = reported["cached_tokens"] or 0
+        cache_write_tokens = reported["cache_write_tokens"] or 0
         total_tokens = _first_integer(usage.get("total_tokens"), prompt_tokens + completion_tokens)
-        cost = generation_data.get("total_cost")
-        if cost is None:
-            cost = usage.get("cost")
-        cost_source = "provider_reported" if cost is not None else "none"
+        cost = reported["cost_usd"]
+        cost_source = reported["cost_source"]
 
         safe_generation_usage = {
             key: generation_data.get(key)
@@ -800,6 +779,64 @@ def _parse_timestamp(value: str) -> datetime:
     if moment.tzinfo is None:
         raise ValueError("timestamps must include a timezone")
     return moment.astimezone(timezone.utc)
+
+
+def _generation_data(generation: Mapping[str, Any] | None) -> dict[str, Any]:
+    generation_data = dict(generation or {})
+    if "data" in generation_data and isinstance(generation_data["data"], Mapping):
+        generation_data = dict(generation_data["data"])
+    return generation_data
+
+
+def openrouter_usage(
+    response: Mapping[str, Any], generation: Mapping[str, Any] | None = None
+) -> dict[str, Any]:
+    """Usage exactly as OpenRouter reported it; None means not reported (never assumed zero).
+
+    The ledger stores these values (with missing counts as 0); telemetry uses them as-is.
+    """
+    generation_data = _generation_data(generation)
+    usage = dict(response.get("usage") or {})
+    prompt_details = dict(usage.get("prompt_tokens_details") or {})
+    completion_details = dict(usage.get("completion_tokens_details") or {})
+    input_tokens = _optional_first_integer(
+        generation_data.get("native_tokens_prompt"), usage.get("prompt_tokens"), usage.get("input_tokens"),
+    )
+    output_tokens = _optional_first_integer(
+        generation_data.get("native_tokens_completion"), usage.get("completion_tokens"),
+        usage.get("output_tokens"),
+    )
+    total_tokens = _optional_first_integer(usage.get("total_tokens"))
+    if total_tokens is None and input_tokens is not None and output_tokens is not None:
+        total_tokens = input_tokens + output_tokens
+    cost = generation_data.get("total_cost")
+    if cost is None:
+        cost = usage.get("cost")
+    return {
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "reasoning_tokens": _optional_first_integer(
+            generation_data.get("native_tokens_reasoning"), completion_details.get("reasoning_tokens"),
+        ),
+        "cached_tokens": _optional_first_integer(
+            generation_data.get("native_tokens_cached"), prompt_details.get("cached_tokens"),
+            dict(usage.get("input_tokens_details") or {}).get("cached_tokens"),
+        ),
+        "cache_write_tokens": _optional_first_integer(prompt_details.get("cache_write_tokens")),
+        "total_tokens": total_tokens,
+        "cost_usd": cost,
+        "cost_source": "provider_reported" if cost is not None else "none",
+        "resolved_model": generation_data.get("model") or response.get("model"),
+        "provider_name": generation_data.get("provider_name"),
+        "finish_reason": generation_data.get("finish_reason") or generation_data.get("native_finish_reason"),
+    }
+
+
+def _optional_first_integer(*values: Any) -> int | None:
+    for value in values:
+        if value is not None:
+            return _first_integer(value)
+    return None
 
 
 def _first_integer(*values: Any) -> int:

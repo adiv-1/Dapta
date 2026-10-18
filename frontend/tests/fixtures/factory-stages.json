@@ -1,0 +1,4908 @@
+[
+ {
+  "agent_outputs": [
+   {
+    "agent": "JEV Router",
+    "output": {
+     "confidence": 0.9,
+     "decision": "create_adapter",
+     "reason": "synthetic fixture"
+    },
+    "source": "Supabase mirror",
+    "stage": "queued",
+    "summary": "Routing decision"
+   }
+  ],
+  "artifacts": [
+   {
+    "created_at": "2026-10-18T11:10:28.198041Z",
+    "name": "route_decision.json",
+    "sha256": "e4947cbb2e54aa03f4dd05ff0e5262d3a828aea0e9d5bcb6bae5b3f90ac76ebb"
+   }
+  ],
+  "created_at": "2026-10-18T11:10:28.197137Z",
+  "dataset_round": 1,
+  "events": [
+   {
+    "event_id": "2d377383-b21a-462b-b215-b290c57d217e",
+    "from_status": null,
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "stage": "jev_router"
+    },
+    "occurred_at": "2026-10-18T11:10:28.197137Z",
+    "sequence": 1,
+    "to_status": "queued"
+   }
+  ],
+  "failure_code": null,
+  "failure_message": null,
+  "idempotency_key": "fixture-factory-stages",
+  "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+  "route": {
+   "confidence": 0.9,
+   "decision": "create_adapter",
+   "reason": "synthetic fixture"
+  },
+  "skill_id": "expense-report",
+  "stage_attempts": [],
+  "status": "queued",
+  "updated_at": "2026-10-18T11:10:28.197137Z",
+  "workflow": "Synthetic: turn receipt text into an expense report.",
+  "workflow_hash": "0bbc79eb08ac888cd61faff718f4d617f220d848dee960f07c348e81b00a4eb7"
+ },
+ {
+  "agent_outputs": [
+   {
+    "agent": "JEV Router",
+    "output": {
+     "confidence": 0.9,
+     "decision": "create_adapter",
+     "reason": "synthetic fixture"
+    },
+    "source": "Supabase mirror",
+    "stage": "queued",
+    "summary": "Routing decision"
+   },
+   {
+    "agent": "Kimi K3 \u2014 Skill Architect",
+    "output": {
+     "evaluation_plan": {
+      "metric": "field_f1"
+     },
+     "output_schema": {
+      "type": "object"
+     },
+     "skill_spec": {
+      "description": "Turn receipts into an expense report.",
+      "name": "expense-report",
+      "workflow": "Synthetic: turn receipt text into an expense report."
+     }
+    },
+    "source": "Supabase mirror",
+    "stage": "architecting",
+    "summary": "Skill contract"
+   }
+  ],
+  "artifacts": [
+   {
+    "created_at": "2026-10-18T11:10:28.226888Z",
+    "name": "evaluation_plan.json",
+    "sha256": "5b35c1c1b6bb170e87b5d2dbd4c798f14afefbac881df8d95ae89af256310ce1"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.226125Z",
+    "name": "output_schema.json",
+    "sha256": "a2c799262a3ce3c19ef5cdd983bf3d12b43ab3c426227091b909dcb7054738c0"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.198041Z",
+    "name": "route_decision.json",
+    "sha256": "e4947cbb2e54aa03f4dd05ff0e5262d3a828aea0e9d5bcb6bae5b3f90ac76ebb"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.227502Z",
+    "name": "skill_spec.json",
+    "sha256": "d1848f2b923785e1032e32525e224472d2fb84726fce9503835a0f50151cb4df"
+   }
+  ],
+  "created_at": "2026-10-18T11:10:28.197137Z",
+  "dataset_round": 1,
+  "evaluation_plan": {
+   "metric": "field_f1"
+  },
+  "events": [
+   {
+    "event_id": "2d377383-b21a-462b-b215-b290c57d217e",
+    "from_status": null,
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "stage": "jev_router"
+    },
+    "occurred_at": "2026-10-18T11:10:28.197137Z",
+    "sequence": 1,
+    "to_status": "queued"
+   },
+   {
+    "event_id": "fa0fd300-6afc-49b9-b610-af3db21f7eee",
+    "from_status": "queued",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.200639Z",
+    "sequence": 2,
+    "to_status": "architecting"
+   },
+   {
+    "event_id": "bcfc045a-e84b-4700-8bff-826c34938c4d",
+    "from_status": "architecting",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.228722Z",
+    "sequence": 3,
+    "to_status": "integrating"
+   }
+  ],
+  "failure_code": null,
+  "failure_message": null,
+  "idempotency_key": "fixture-factory-stages",
+  "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+  "output_schema": {
+   "type": "object"
+  },
+  "route": {
+   "confidence": 0.9,
+   "decision": "create_adapter",
+   "reason": "synthetic fixture"
+  },
+  "skill_id": "expense-report",
+  "skill_spec": {
+   "description": "Turn receipts into an expense report.",
+   "name": "expense-report",
+   "workflow": "Synthetic: turn receipt text into an expense report."
+  },
+  "stage_attempts": [
+   {
+    "claimed_at": "2026-10-18T11:10:28.200639Z",
+    "completed_at": "2026-10-18T11:10:28.228722Z",
+    "round": 1,
+    "stage": "skill_architect",
+    "status": "completed"
+   }
+  ],
+  "status": "integrating",
+  "updated_at": "2026-10-18T11:10:28.228722Z",
+  "workflow": "Synthetic: turn receipt text into an expense report.",
+  "workflow_hash": "0bbc79eb08ac888cd61faff718f4d617f220d848dee960f07c348e81b00a4eb7"
+ },
+ {
+  "agent_outputs": [
+   {
+    "agent": "JEV Router",
+    "output": {
+     "confidence": 0.9,
+     "decision": "create_adapter",
+     "reason": "synthetic fixture"
+    },
+    "source": "Supabase mirror",
+    "stage": "queued",
+    "summary": "Routing decision"
+   },
+   {
+    "agent": "Kimi K3 \u2014 Skill Architect",
+    "output": {
+     "evaluation_plan": {
+      "metric": "field_f1"
+     },
+     "output_schema": {
+      "type": "object"
+     },
+     "skill_spec": {
+      "description": "Turn receipts into an expense report.",
+      "name": "expense-report",
+      "workflow": "Synthetic: turn receipt text into an expense report."
+     }
+    },
+    "source": "Supabase mirror",
+    "stage": "architecting",
+    "summary": "Skill contract"
+   },
+   {
+    "agent": "Devin \u2014 Skill Integration",
+    "output": {
+     "evidence_type": "session",
+     "pull_request_url": null,
+     "session_id": "devin-session-1",
+     "status": "completed"
+    },
+    "source": "Supabase mirror",
+    "stage": "integrating",
+    "summary": "Implementation evidence"
+   }
+  ],
+  "artifacts": [
+   {
+    "created_at": "2026-10-18T11:10:28.226888Z",
+    "name": "evaluation_plan.json",
+    "sha256": "5b35c1c1b6bb170e87b5d2dbd4c798f14afefbac881df8d95ae89af256310ce1"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.233574Z",
+    "name": "integration.json",
+    "sha256": "3b6b27b6a8861ee2843d7f6c34308d3ca3020f18534907c05538152c5aec3bf8"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.226125Z",
+    "name": "output_schema.json",
+    "sha256": "a2c799262a3ce3c19ef5cdd983bf3d12b43ab3c426227091b909dcb7054738c0"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.198041Z",
+    "name": "route_decision.json",
+    "sha256": "e4947cbb2e54aa03f4dd05ff0e5262d3a828aea0e9d5bcb6bae5b3f90ac76ebb"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.227502Z",
+    "name": "skill_spec.json",
+    "sha256": "d1848f2b923785e1032e32525e224472d2fb84726fce9503835a0f50151cb4df"
+   }
+  ],
+  "created_at": "2026-10-18T11:10:28.197137Z",
+  "dataset_round": 1,
+  "evaluation_plan": {
+   "metric": "field_f1"
+  },
+  "events": [
+   {
+    "event_id": "2d377383-b21a-462b-b215-b290c57d217e",
+    "from_status": null,
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "stage": "jev_router"
+    },
+    "occurred_at": "2026-10-18T11:10:28.197137Z",
+    "sequence": 1,
+    "to_status": "queued"
+   },
+   {
+    "event_id": "fa0fd300-6afc-49b9-b610-af3db21f7eee",
+    "from_status": "queued",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.200639Z",
+    "sequence": 2,
+    "to_status": "architecting"
+   },
+   {
+    "event_id": "bcfc045a-e84b-4700-8bff-826c34938c4d",
+    "from_status": "architecting",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.228722Z",
+    "sequence": 3,
+    "to_status": "integrating"
+   },
+   {
+    "event_id": "ace8d18a-b1c3-4fb5-96a4-6ff2c6319b80",
+    "from_status": "integrating",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.234125Z",
+    "sequence": 4,
+    "to_status": "building_dataset"
+   }
+  ],
+  "failure_code": null,
+  "failure_message": null,
+  "idempotency_key": "fixture-factory-stages",
+  "integration": {
+   "evidence_type": "session",
+   "pull_request_url": null,
+   "session_id": "devin-session-1",
+   "status": "completed"
+  },
+  "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+  "output_schema": {
+   "type": "object"
+  },
+  "route": {
+   "confidence": 0.9,
+   "decision": "create_adapter",
+   "reason": "synthetic fixture"
+  },
+  "skill_id": "expense-report",
+  "skill_spec": {
+   "description": "Turn receipts into an expense report.",
+   "name": "expense-report",
+   "workflow": "Synthetic: turn receipt text into an expense report."
+  },
+  "stage_attempts": [
+   {
+    "claimed_at": "2026-10-18T11:10:28.200639Z",
+    "completed_at": "2026-10-18T11:10:28.228722Z",
+    "round": 1,
+    "stage": "skill_architect",
+    "status": "completed"
+   },
+   {
+    "claimed_at": "2026-10-18T11:10:28.231374Z",
+    "completed_at": "2026-10-18T11:10:28.234125Z",
+    "round": 1,
+    "stage": "skill_integration",
+    "status": "completed"
+   }
+  ],
+  "status": "building_dataset",
+  "updated_at": "2026-10-18T11:10:28.234125Z",
+  "workflow": "Synthetic: turn receipt text into an expense report.",
+  "workflow_hash": "0bbc79eb08ac888cd61faff718f4d617f220d848dee960f07c348e81b00a4eb7"
+ },
+ {
+  "agent_outputs": [
+   {
+    "agent": "JEV Router",
+    "output": {
+     "confidence": 0.9,
+     "decision": "create_adapter",
+     "reason": "synthetic fixture"
+    },
+    "source": "Supabase mirror",
+    "stage": "queued",
+    "summary": "Routing decision"
+   },
+   {
+    "agent": "Kimi K3 \u2014 Skill Architect",
+    "output": {
+     "evaluation_plan": {
+      "metric": "field_f1"
+     },
+     "output_schema": {
+      "type": "object"
+     },
+     "skill_spec": {
+      "description": "Turn receipts into an expense report.",
+      "name": "expense-report",
+      "workflow": "Synthetic: turn receipt text into an expense report."
+     }
+    },
+    "source": "Supabase mirror",
+    "stage": "architecting",
+    "summary": "Skill contract"
+   },
+   {
+    "agent": "Devin \u2014 Skill Integration",
+    "output": {
+     "evidence_type": "session",
+     "pull_request_url": null,
+     "session_id": "devin-session-1",
+     "status": "completed"
+    },
+    "source": "Supabase mirror",
+    "stage": "integrating",
+    "summary": "Implementation evidence"
+   }
+  ],
+  "artifacts": [
+   {
+    "created_at": "2026-10-18T11:10:28.239670Z",
+    "name": "dataset.json",
+    "sha256": "52b8213dc98bdb1533d2f69e26ca6ffebd70bb8fa5e8f6ff94c9a99caa38e723"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.226888Z",
+    "name": "evaluation_plan.json",
+    "sha256": "5b35c1c1b6bb170e87b5d2dbd4c798f14afefbac881df8d95ae89af256310ce1"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.233574Z",
+    "name": "integration.json",
+    "sha256": "3b6b27b6a8861ee2843d7f6c34308d3ca3020f18534907c05538152c5aec3bf8"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.226125Z",
+    "name": "output_schema.json",
+    "sha256": "a2c799262a3ce3c19ef5cdd983bf3d12b43ab3c426227091b909dcb7054738c0"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.198041Z",
+    "name": "route_decision.json",
+    "sha256": "e4947cbb2e54aa03f4dd05ff0e5262d3a828aea0e9d5bcb6bae5b3f90ac76ebb"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.227502Z",
+    "name": "skill_spec.json",
+    "sha256": "d1848f2b923785e1032e32525e224472d2fb84726fce9503835a0f50151cb4df"
+   }
+  ],
+  "created_at": "2026-10-18T11:10:28.197137Z",
+  "dataset_round": 1,
+  "evaluation_plan": {
+   "metric": "field_f1"
+  },
+  "events": [
+   {
+    "event_id": "2d377383-b21a-462b-b215-b290c57d217e",
+    "from_status": null,
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "stage": "jev_router"
+    },
+    "occurred_at": "2026-10-18T11:10:28.197137Z",
+    "sequence": 1,
+    "to_status": "queued"
+   },
+   {
+    "event_id": "fa0fd300-6afc-49b9-b610-af3db21f7eee",
+    "from_status": "queued",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.200639Z",
+    "sequence": 2,
+    "to_status": "architecting"
+   },
+   {
+    "event_id": "bcfc045a-e84b-4700-8bff-826c34938c4d",
+    "from_status": "architecting",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.228722Z",
+    "sequence": 3,
+    "to_status": "integrating"
+   },
+   {
+    "event_id": "ace8d18a-b1c3-4fb5-96a4-6ff2c6319b80",
+    "from_status": "integrating",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.234125Z",
+    "sequence": 4,
+    "to_status": "building_dataset"
+   },
+   {
+    "event_id": "c13c06bf-a65e-4eb5-a7c0-e77d55216cf2",
+    "from_status": "building_dataset",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.240258Z",
+    "sequence": 5,
+    "to_status": "validating"
+   }
+  ],
+  "failure_code": null,
+  "failure_message": null,
+  "idempotency_key": "fixture-factory-stages",
+  "integration": {
+   "evidence_type": "session",
+   "pull_request_url": null,
+   "session_id": "devin-session-1",
+   "status": "completed"
+  },
+  "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+  "output_schema": {
+   "type": "object"
+  },
+  "route": {
+   "confidence": 0.9,
+   "decision": "create_adapter",
+   "reason": "synthetic fixture"
+  },
+  "skill_id": "expense-report",
+  "skill_spec": {
+   "description": "Turn receipts into an expense report.",
+   "name": "expense-report",
+   "workflow": "Synthetic: turn receipt text into an expense report."
+  },
+  "stage_attempts": [
+   {
+    "claimed_at": "2026-10-18T11:10:28.200639Z",
+    "completed_at": "2026-10-18T11:10:28.228722Z",
+    "round": 1,
+    "stage": "skill_architect",
+    "status": "completed"
+   },
+   {
+    "claimed_at": "2026-10-18T11:10:28.231374Z",
+    "completed_at": "2026-10-18T11:10:28.234125Z",
+    "round": 1,
+    "stage": "skill_integration",
+    "status": "completed"
+   },
+   {
+    "claimed_at": "2026-10-18T11:10:28.237068Z",
+    "completed_at": "2026-10-18T11:10:28.240258Z",
+    "round": 1,
+    "stage": "data_builder",
+    "status": "completed"
+   }
+  ],
+  "status": "validating",
+  "updated_at": "2026-10-18T11:10:28.240258Z",
+  "workflow": "Synthetic: turn receipt text into an expense report.",
+  "workflow_hash": "0bbc79eb08ac888cd61faff718f4d617f220d848dee960f07c348e81b00a4eb7"
+ },
+ {
+  "agent_outputs": [
+   {
+    "agent": "JEV Router",
+    "output": {
+     "confidence": 0.9,
+     "decision": "create_adapter",
+     "reason": "synthetic fixture"
+    },
+    "source": "Supabase mirror",
+    "stage": "queued",
+    "summary": "Routing decision"
+   },
+   {
+    "agent": "Kimi K3 \u2014 Skill Architect",
+    "output": {
+     "evaluation_plan": {
+      "metric": "field_f1"
+     },
+     "output_schema": {
+      "type": "object"
+     },
+     "skill_spec": {
+      "description": "Turn receipts into an expense report.",
+      "name": "expense-report",
+      "workflow": "Synthetic: turn receipt text into an expense report."
+     }
+    },
+    "source": "Supabase mirror",
+    "stage": "architecting",
+    "summary": "Skill contract"
+   },
+   {
+    "agent": "Devin \u2014 Skill Integration",
+    "output": {
+     "evidence_type": "session",
+     "pull_request_url": null,
+     "session_id": "devin-session-1",
+     "status": "completed"
+    },
+    "source": "Supabase mirror",
+    "stage": "integrating",
+    "summary": "Implementation evidence"
+   },
+   {
+    "agent": "Kimi K3 \u2014 Data Builder",
+    "output": {
+     "counts": {
+      "dev": 1,
+      "ood": 1,
+      "test": 1,
+      "train": 1
+     },
+     "round": 1
+    },
+    "source": "Supabase mirror",
+    "stage": "building_dataset",
+    "summary": "Generated split counts"
+   },
+   {
+    "agent": "Dataset Validator",
+    "output": {
+     "counts": {
+      "dev": 1,
+      "ood": 1,
+      "test": 1,
+      "train": 1
+     },
+     "frozen_test_sha256": "frozen-test-hash",
+     "passed": true,
+     "round": 1
+    },
+    "source": "Supabase mirror",
+    "stage": "validating",
+    "summary": "Deterministic validation"
+   }
+  ],
+  "artifacts": [
+   {
+    "created_at": "2026-10-18T11:10:28.239670Z",
+    "name": "dataset.json",
+    "sha256": "52b8213dc98bdb1533d2f69e26ca6ffebd70bb8fa5e8f6ff94c9a99caa38e723"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.226888Z",
+    "name": "evaluation_plan.json",
+    "sha256": "5b35c1c1b6bb170e87b5d2dbd4c798f14afefbac881df8d95ae89af256310ce1"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.233574Z",
+    "name": "integration.json",
+    "sha256": "3b6b27b6a8861ee2843d7f6c34308d3ca3020f18534907c05538152c5aec3bf8"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.226125Z",
+    "name": "output_schema.json",
+    "sha256": "a2c799262a3ce3c19ef5cdd983bf3d12b43ab3c426227091b909dcb7054738c0"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.198041Z",
+    "name": "route_decision.json",
+    "sha256": "e4947cbb2e54aa03f4dd05ff0e5262d3a828aea0e9d5bcb6bae5b3f90ac76ebb"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.227502Z",
+    "name": "skill_spec.json",
+    "sha256": "d1848f2b923785e1032e32525e224472d2fb84726fce9503835a0f50151cb4df"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.246053Z",
+    "name": "validation.json",
+    "sha256": "eaf871651320488a2a66ceb56a47210e53223cefdb7704da3b3ad693cf0c1f7c"
+   }
+  ],
+  "created_at": "2026-10-18T11:10:28.197137Z",
+  "dataset_round": 1,
+  "evaluation_plan": {
+   "metric": "field_f1"
+  },
+  "events": [
+   {
+    "event_id": "2d377383-b21a-462b-b215-b290c57d217e",
+    "from_status": null,
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "stage": "jev_router"
+    },
+    "occurred_at": "2026-10-18T11:10:28.197137Z",
+    "sequence": 1,
+    "to_status": "queued"
+   },
+   {
+    "event_id": "fa0fd300-6afc-49b9-b610-af3db21f7eee",
+    "from_status": "queued",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.200639Z",
+    "sequence": 2,
+    "to_status": "architecting"
+   },
+   {
+    "event_id": "bcfc045a-e84b-4700-8bff-826c34938c4d",
+    "from_status": "architecting",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.228722Z",
+    "sequence": 3,
+    "to_status": "integrating"
+   },
+   {
+    "event_id": "ace8d18a-b1c3-4fb5-96a4-6ff2c6319b80",
+    "from_status": "integrating",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.234125Z",
+    "sequence": 4,
+    "to_status": "building_dataset"
+   },
+   {
+    "event_id": "c13c06bf-a65e-4eb5-a7c0-e77d55216cf2",
+    "from_status": "building_dataset",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.240258Z",
+    "sequence": 5,
+    "to_status": "validating"
+   },
+   {
+    "event_id": "af3627fa-af0e-4e86-a128-cf4df80b52f4",
+    "from_status": "validating",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.246579Z",
+    "sequence": 6,
+    "to_status": "awaiting_compute"
+   }
+  ],
+  "failure_code": null,
+  "failure_message": null,
+  "idempotency_key": "fixture-factory-stages",
+  "integration": {
+   "evidence_type": "session",
+   "pull_request_url": null,
+   "session_id": "devin-session-1",
+   "status": "completed"
+  },
+  "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+  "output_schema": {
+   "type": "object"
+  },
+  "route": {
+   "confidence": 0.9,
+   "decision": "create_adapter",
+   "reason": "synthetic fixture"
+  },
+  "skill_id": "expense-report",
+  "skill_spec": {
+   "description": "Turn receipts into an expense report.",
+   "name": "expense-report",
+   "workflow": "Synthetic: turn receipt text into an expense report."
+  },
+  "stage_attempts": [
+   {
+    "claimed_at": "2026-10-18T11:10:28.200639Z",
+    "completed_at": "2026-10-18T11:10:28.228722Z",
+    "round": 1,
+    "stage": "skill_architect",
+    "status": "completed"
+   },
+   {
+    "claimed_at": "2026-10-18T11:10:28.231374Z",
+    "completed_at": "2026-10-18T11:10:28.234125Z",
+    "round": 1,
+    "stage": "skill_integration",
+    "status": "completed"
+   },
+   {
+    "claimed_at": "2026-10-18T11:10:28.237068Z",
+    "completed_at": "2026-10-18T11:10:28.240258Z",
+    "round": 1,
+    "stage": "data_builder",
+    "status": "completed"
+   },
+   {
+    "claimed_at": "2026-10-18T11:10:28.242693Z",
+    "completed_at": "2026-10-18T11:10:28.246579Z",
+    "round": 1,
+    "stage": "dataset_validator",
+    "status": "completed"
+   }
+  ],
+  "status": "awaiting_compute",
+  "updated_at": "2026-10-18T11:10:28.246579Z",
+  "validation": {
+   "counts": {
+    "dev": 1,
+    "ood": 1,
+    "test": 1,
+    "train": 1
+   },
+   "frozen_test_sha256": "frozen-test-hash",
+   "passed": true,
+   "round": 1
+  },
+  "workflow": "Synthetic: turn receipt text into an expense report.",
+  "workflow_hash": "0bbc79eb08ac888cd61faff718f4d617f220d848dee960f07c348e81b00a4eb7"
+ },
+ {
+  "agent_outputs": [
+   {
+    "agent": "JEV Router",
+    "output": {
+     "confidence": 0.9,
+     "decision": "create_adapter",
+     "reason": "synthetic fixture"
+    },
+    "source": "Supabase mirror",
+    "stage": "queued",
+    "summary": "Routing decision"
+   },
+   {
+    "agent": "Kimi K3 \u2014 Skill Architect",
+    "output": {
+     "evaluation_plan": {
+      "metric": "field_f1"
+     },
+     "output_schema": {
+      "type": "object"
+     },
+     "skill_spec": {
+      "description": "Turn receipts into an expense report.",
+      "name": "expense-report",
+      "workflow": "Synthetic: turn receipt text into an expense report."
+     }
+    },
+    "source": "Supabase mirror",
+    "stage": "architecting",
+    "summary": "Skill contract"
+   },
+   {
+    "agent": "Devin \u2014 Skill Integration",
+    "output": {
+     "evidence_type": "session",
+     "pull_request_url": null,
+     "session_id": "devin-session-1",
+     "status": "completed"
+    },
+    "source": "Supabase mirror",
+    "stage": "integrating",
+    "summary": "Implementation evidence"
+   },
+   {
+    "agent": "Kimi K3 \u2014 Data Builder",
+    "output": {
+     "counts": {
+      "dev": 1,
+      "ood": 1,
+      "test": 1,
+      "train": 1
+     },
+     "round": 1
+    },
+    "source": "Supabase mirror",
+    "stage": "building_dataset",
+    "summary": "Generated split counts"
+   },
+   {
+    "agent": "Dataset Validator",
+    "output": {
+     "counts": {
+      "dev": 1,
+      "ood": 1,
+      "test": 1,
+      "train": 1
+     },
+     "frozen_test_sha256": "frozen-test-hash",
+     "passed": true,
+     "round": 1
+    },
+    "source": "Supabase mirror",
+    "stage": "validating",
+    "summary": "Deterministic validation"
+   }
+  ],
+  "artifacts": [
+   {
+    "created_at": "2026-10-18T11:10:28.239670Z",
+    "name": "dataset.json",
+    "sha256": "52b8213dc98bdb1533d2f69e26ca6ffebd70bb8fa5e8f6ff94c9a99caa38e723"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.226888Z",
+    "name": "evaluation_plan.json",
+    "sha256": "5b35c1c1b6bb170e87b5d2dbd4c798f14afefbac881df8d95ae89af256310ce1"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.233574Z",
+    "name": "integration.json",
+    "sha256": "3b6b27b6a8861ee2843d7f6c34308d3ca3020f18534907c05538152c5aec3bf8"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.226125Z",
+    "name": "output_schema.json",
+    "sha256": "a2c799262a3ce3c19ef5cdd983bf3d12b43ab3c426227091b909dcb7054738c0"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.198041Z",
+    "name": "route_decision.json",
+    "sha256": "e4947cbb2e54aa03f4dd05ff0e5262d3a828aea0e9d5bcb6bae5b3f90ac76ebb"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.227502Z",
+    "name": "skill_spec.json",
+    "sha256": "d1848f2b923785e1032e32525e224472d2fb84726fce9503835a0f50151cb4df"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.246053Z",
+    "name": "validation.json",
+    "sha256": "eaf871651320488a2a66ceb56a47210e53223cefdb7704da3b3ad693cf0c1f7c"
+   }
+  ],
+  "created_at": "2026-10-18T11:10:28.197137Z",
+  "dataset_round": 1,
+  "evaluation_plan": {
+   "metric": "field_f1"
+  },
+  "events": [
+   {
+    "event_id": "2d377383-b21a-462b-b215-b290c57d217e",
+    "from_status": null,
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "stage": "jev_router"
+    },
+    "occurred_at": "2026-10-18T11:10:28.197137Z",
+    "sequence": 1,
+    "to_status": "queued"
+   },
+   {
+    "event_id": "fa0fd300-6afc-49b9-b610-af3db21f7eee",
+    "from_status": "queued",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.200639Z",
+    "sequence": 2,
+    "to_status": "architecting"
+   },
+   {
+    "event_id": "bcfc045a-e84b-4700-8bff-826c34938c4d",
+    "from_status": "architecting",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.228722Z",
+    "sequence": 3,
+    "to_status": "integrating"
+   },
+   {
+    "event_id": "ace8d18a-b1c3-4fb5-96a4-6ff2c6319b80",
+    "from_status": "integrating",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.234125Z",
+    "sequence": 4,
+    "to_status": "building_dataset"
+   },
+   {
+    "event_id": "c13c06bf-a65e-4eb5-a7c0-e77d55216cf2",
+    "from_status": "building_dataset",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.240258Z",
+    "sequence": 5,
+    "to_status": "validating"
+   },
+   {
+    "event_id": "af3627fa-af0e-4e86-a128-cf4df80b52f4",
+    "from_status": "validating",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.246579Z",
+    "sequence": 6,
+    "to_status": "awaiting_compute"
+   },
+   {
+    "event_id": "20bac4d9-b89b-4d50-a984-08e93d39211a",
+    "from_status": "awaiting_compute",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "budget_checked": true,
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.249929Z",
+    "sequence": 7,
+    "to_status": "provisioning_gpu"
+   }
+  ],
+  "failure_code": null,
+  "failure_message": null,
+  "idempotency_key": "fixture-factory-stages",
+  "integration": {
+   "evidence_type": "session",
+   "pull_request_url": null,
+   "session_id": "devin-session-1",
+   "status": "completed"
+  },
+  "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+  "output_schema": {
+   "type": "object"
+  },
+  "route": {
+   "confidence": 0.9,
+   "decision": "create_adapter",
+   "reason": "synthetic fixture"
+  },
+  "skill_id": "expense-report",
+  "skill_spec": {
+   "description": "Turn receipts into an expense report.",
+   "name": "expense-report",
+   "workflow": "Synthetic: turn receipt text into an expense report."
+  },
+  "stage_attempts": [
+   {
+    "claimed_at": "2026-10-18T11:10:28.200639Z",
+    "completed_at": "2026-10-18T11:10:28.228722Z",
+    "round": 1,
+    "stage": "skill_architect",
+    "status": "completed"
+   },
+   {
+    "claimed_at": "2026-10-18T11:10:28.231374Z",
+    "completed_at": "2026-10-18T11:10:28.234125Z",
+    "round": 1,
+    "stage": "skill_integration",
+    "status": "completed"
+   },
+   {
+    "claimed_at": "2026-10-18T11:10:28.237068Z",
+    "completed_at": "2026-10-18T11:10:28.240258Z",
+    "round": 1,
+    "stage": "data_builder",
+    "status": "completed"
+   },
+   {
+    "claimed_at": "2026-10-18T11:10:28.242693Z",
+    "completed_at": "2026-10-18T11:10:28.246579Z",
+    "round": 1,
+    "stage": "dataset_validator",
+    "status": "completed"
+   }
+  ],
+  "status": "provisioning_gpu",
+  "updated_at": "2026-10-18T11:10:28.249929Z",
+  "validation": {
+   "counts": {
+    "dev": 1,
+    "ood": 1,
+    "test": 1,
+    "train": 1
+   },
+   "frozen_test_sha256": "frozen-test-hash",
+   "passed": true,
+   "round": 1
+  },
+  "workflow": "Synthetic: turn receipt text into an expense report.",
+  "workflow_hash": "0bbc79eb08ac888cd61faff718f4d617f220d848dee960f07c348e81b00a4eb7"
+ },
+ {
+  "agent_outputs": [
+   {
+    "agent": "JEV Router",
+    "output": {
+     "confidence": 0.9,
+     "decision": "create_adapter",
+     "reason": "synthetic fixture"
+    },
+    "source": "Supabase mirror",
+    "stage": "queued",
+    "summary": "Routing decision"
+   },
+   {
+    "agent": "Kimi K3 \u2014 Skill Architect",
+    "output": {
+     "evaluation_plan": {
+      "metric": "field_f1"
+     },
+     "output_schema": {
+      "type": "object"
+     },
+     "skill_spec": {
+      "description": "Turn receipts into an expense report.",
+      "name": "expense-report",
+      "workflow": "Synthetic: turn receipt text into an expense report."
+     }
+    },
+    "source": "Supabase mirror",
+    "stage": "architecting",
+    "summary": "Skill contract"
+   },
+   {
+    "agent": "Devin \u2014 Skill Integration",
+    "output": {
+     "evidence_type": "session",
+     "pull_request_url": null,
+     "session_id": "devin-session-1",
+     "status": "completed"
+    },
+    "source": "Supabase mirror",
+    "stage": "integrating",
+    "summary": "Implementation evidence"
+   },
+   {
+    "agent": "Kimi K3 \u2014 Data Builder",
+    "output": {
+     "counts": {
+      "dev": 1,
+      "ood": 1,
+      "test": 1,
+      "train": 1
+     },
+     "round": 1
+    },
+    "source": "Supabase mirror",
+    "stage": "building_dataset",
+    "summary": "Generated split counts"
+   },
+   {
+    "agent": "Dataset Validator",
+    "output": {
+     "counts": {
+      "dev": 1,
+      "ood": 1,
+      "test": 1,
+      "train": 1
+     },
+     "frozen_test_sha256": "frozen-test-hash",
+     "passed": true,
+     "round": 1
+    },
+    "source": "Supabase mirror",
+    "stage": "validating",
+    "summary": "Deterministic validation"
+   },
+   {
+    "agent": "RunPod Training Worker",
+    "output": {
+     "current": 1,
+     "percent": 100,
+     "stage": "training",
+     "total": 1
+    },
+    "source": "Supabase mirror",
+    "stage": "training",
+    "summary": "Live compute telemetry"
+   },
+   {
+    "agent": "RunPod Training Worker",
+    "output": {
+     "base_model": "Qwen/Qwen3-VL-8B-Instruct",
+     "training_cost_usd": "0.10",
+     "version": "v1"
+    },
+    "source": "Supabase mirror",
+    "stage": "training",
+    "summary": "Saved training metrics"
+   }
+  ],
+  "artifacts": [
+   {
+    "created_at": "2026-10-18T11:10:28.239670Z",
+    "name": "dataset.json",
+    "sha256": "52b8213dc98bdb1533d2f69e26ca6ffebd70bb8fa5e8f6ff94c9a99caa38e723"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.226888Z",
+    "name": "evaluation_plan.json",
+    "sha256": "5b35c1c1b6bb170e87b5d2dbd4c798f14afefbac881df8d95ae89af256310ce1"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.233574Z",
+    "name": "integration.json",
+    "sha256": "3b6b27b6a8861ee2843d7f6c34308d3ca3020f18534907c05538152c5aec3bf8"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.226125Z",
+    "name": "output_schema.json",
+    "sha256": "a2c799262a3ce3c19ef5cdd983bf3d12b43ab3c426227091b909dcb7054738c0"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.253688Z",
+    "name": "progress.json",
+    "sha256": "343ed6b5b6be5e50c918d22f02b16adf703de36a13375f879036537d7ab47628"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.198041Z",
+    "name": "route_decision.json",
+    "sha256": "e4947cbb2e54aa03f4dd05ff0e5262d3a828aea0e9d5bcb6bae5b3f90ac76ebb"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.227502Z",
+    "name": "skill_spec.json",
+    "sha256": "d1848f2b923785e1032e32525e224472d2fb84726fce9503835a0f50151cb4df"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.254949Z",
+    "name": "training.json",
+    "sha256": "d2f7eced7eb4fd810cf89ff2d1f0359d9cd3964f53e28ec650975ed1d06b886b"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.246053Z",
+    "name": "validation.json",
+    "sha256": "eaf871651320488a2a66ceb56a47210e53223cefdb7704da3b3ad693cf0c1f7c"
+   }
+  ],
+  "created_at": "2026-10-18T11:10:28.197137Z",
+  "dataset_round": 1,
+  "evaluation_plan": {
+   "metric": "field_f1"
+  },
+  "events": [
+   {
+    "event_id": "2d377383-b21a-462b-b215-b290c57d217e",
+    "from_status": null,
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "stage": "jev_router"
+    },
+    "occurred_at": "2026-10-18T11:10:28.197137Z",
+    "sequence": 1,
+    "to_status": "queued"
+   },
+   {
+    "event_id": "fa0fd300-6afc-49b9-b610-af3db21f7eee",
+    "from_status": "queued",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.200639Z",
+    "sequence": 2,
+    "to_status": "architecting"
+   },
+   {
+    "event_id": "bcfc045a-e84b-4700-8bff-826c34938c4d",
+    "from_status": "architecting",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.228722Z",
+    "sequence": 3,
+    "to_status": "integrating"
+   },
+   {
+    "event_id": "ace8d18a-b1c3-4fb5-96a4-6ff2c6319b80",
+    "from_status": "integrating",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.234125Z",
+    "sequence": 4,
+    "to_status": "building_dataset"
+   },
+   {
+    "event_id": "c13c06bf-a65e-4eb5-a7c0-e77d55216cf2",
+    "from_status": "building_dataset",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.240258Z",
+    "sequence": 5,
+    "to_status": "validating"
+   },
+   {
+    "event_id": "af3627fa-af0e-4e86-a128-cf4df80b52f4",
+    "from_status": "validating",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.246579Z",
+    "sequence": 6,
+    "to_status": "awaiting_compute"
+   },
+   {
+    "event_id": "20bac4d9-b89b-4d50-a984-08e93d39211a",
+    "from_status": "awaiting_compute",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "budget_checked": true,
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.249929Z",
+    "sequence": 7,
+    "to_status": "provisioning_gpu"
+   },
+   {
+    "event_id": "bbfaa60c-4847-4410-af30-1cb6b432969f",
+    "from_status": "provisioning_gpu",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.251785Z",
+    "sequence": 8,
+    "to_status": "training"
+   },
+   {
+    "event_id": "1c93ed25-9267-44c3-9b2f-838b44cecaed",
+    "from_status": "training",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "progress": {
+      "current": 1,
+      "percent": 100,
+      "stage": "training",
+      "total": 1
+     }
+    },
+    "occurred_at": "2026-10-18T11:10:28.253688Z",
+    "sequence": 9,
+    "to_status": "training"
+   },
+   {
+    "event_id": "932943d2-0205-466e-aaf1-5cac6e8d3754",
+    "from_status": "training",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.255488Z",
+    "sequence": 10,
+    "to_status": "evaluating"
+   }
+  ],
+  "failure_code": null,
+  "failure_message": null,
+  "idempotency_key": "fixture-factory-stages",
+  "integration": {
+   "evidence_type": "session",
+   "pull_request_url": null,
+   "session_id": "devin-session-1",
+   "status": "completed"
+  },
+  "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+  "output_schema": {
+   "type": "object"
+  },
+  "progress": {
+   "current": 1,
+   "percent": 100,
+   "stage": "training",
+   "total": 1
+  },
+  "route": {
+   "confidence": 0.9,
+   "decision": "create_adapter",
+   "reason": "synthetic fixture"
+  },
+  "skill_id": "expense-report",
+  "skill_spec": {
+   "description": "Turn receipts into an expense report.",
+   "name": "expense-report",
+   "workflow": "Synthetic: turn receipt text into an expense report."
+  },
+  "stage_attempts": [
+   {
+    "claimed_at": "2026-10-18T11:10:28.200639Z",
+    "completed_at": "2026-10-18T11:10:28.228722Z",
+    "round": 1,
+    "stage": "skill_architect",
+    "status": "completed"
+   },
+   {
+    "claimed_at": "2026-10-18T11:10:28.231374Z",
+    "completed_at": "2026-10-18T11:10:28.234125Z",
+    "round": 1,
+    "stage": "skill_integration",
+    "status": "completed"
+   },
+   {
+    "claimed_at": "2026-10-18T11:10:28.237068Z",
+    "completed_at": "2026-10-18T11:10:28.240258Z",
+    "round": 1,
+    "stage": "data_builder",
+    "status": "completed"
+   },
+   {
+    "claimed_at": "2026-10-18T11:10:28.242693Z",
+    "completed_at": "2026-10-18T11:10:28.246579Z",
+    "round": 1,
+    "stage": "dataset_validator",
+    "status": "completed"
+   },
+   {
+    "claimed_at": "2026-10-18T11:10:28.251785Z",
+    "completed_at": "2026-10-18T11:10:28.255488Z",
+    "round": 1,
+    "stage": "adapter_training",
+    "status": "completed"
+   }
+  ],
+  "status": "evaluating",
+  "training": {
+   "base_model": "Qwen/Qwen3-VL-8B-Instruct",
+   "training_cost_usd": "0.10",
+   "version": "v1"
+  },
+  "updated_at": "2026-10-18T11:10:28.255488Z",
+  "validation": {
+   "counts": {
+    "dev": 1,
+    "ood": 1,
+    "test": 1,
+    "train": 1
+   },
+   "frozen_test_sha256": "frozen-test-hash",
+   "passed": true,
+   "round": 1
+  },
+  "workflow": "Synthetic: turn receipt text into an expense report.",
+  "workflow_hash": "0bbc79eb08ac888cd61faff718f4d617f220d848dee960f07c348e81b00a4eb7"
+ },
+ {
+  "agent_outputs": [
+   {
+    "agent": "JEV Router",
+    "output": {
+     "confidence": 0.9,
+     "decision": "create_adapter",
+     "reason": "synthetic fixture"
+    },
+    "source": "Supabase mirror",
+    "stage": "queued",
+    "summary": "Routing decision"
+   },
+   {
+    "agent": "Kimi K3 \u2014 Skill Architect",
+    "output": {
+     "evaluation_plan": {
+      "metric": "field_f1"
+     },
+     "output_schema": {
+      "type": "object"
+     },
+     "skill_spec": {
+      "description": "Turn receipts into an expense report.",
+      "name": "expense-report",
+      "workflow": "Synthetic: turn receipt text into an expense report."
+     }
+    },
+    "source": "Supabase mirror",
+    "stage": "architecting",
+    "summary": "Skill contract"
+   },
+   {
+    "agent": "Devin \u2014 Skill Integration",
+    "output": {
+     "evidence_type": "session",
+     "pull_request_url": null,
+     "session_id": "devin-session-1",
+     "status": "completed"
+    },
+    "source": "Supabase mirror",
+    "stage": "integrating",
+    "summary": "Implementation evidence"
+   },
+   {
+    "agent": "Kimi K3 \u2014 Data Builder",
+    "output": {
+     "counts": {
+      "dev": 1,
+      "ood": 1,
+      "test": 1,
+      "train": 1
+     },
+     "round": 1
+    },
+    "source": "Supabase mirror",
+    "stage": "building_dataset",
+    "summary": "Generated split counts"
+   },
+   {
+    "agent": "Dataset Validator",
+    "output": {
+     "counts": {
+      "dev": 1,
+      "ood": 1,
+      "test": 1,
+      "train": 1
+     },
+     "frozen_test_sha256": "frozen-test-hash",
+     "passed": true,
+     "round": 1
+    },
+    "source": "Supabase mirror",
+    "stage": "validating",
+    "summary": "Deterministic validation"
+   },
+   {
+    "agent": "RunPod Training Worker",
+    "output": {
+     "current": 1,
+     "percent": 100,
+     "stage": "training",
+     "total": 1
+    },
+    "source": "Supabase mirror",
+    "stage": "training",
+    "summary": "Live compute telemetry"
+   },
+   {
+    "agent": "Independent Evaluator",
+    "output": {
+     "conditions": {
+      "base_no_skill": {
+       "field_f1": 0.5
+      },
+      "base_with_skill": {
+       "field_f1": 0.55
+      },
+      "lora_short_prompt": {
+       "field_f1": 0.54
+      }
+     },
+     "dev_feedback": {
+      "instruction": "repair DEV failures"
+     },
+     "passed": false
+    },
+    "source": "Supabase mirror",
+    "stage": "evaluating",
+    "summary": "Base vs Skill vs LoRA"
+   }
+  ],
+  "artifacts": [
+   {
+    "created_at": "2026-10-18T11:10:28.239670Z",
+    "name": "dataset.json",
+    "sha256": "52b8213dc98bdb1533d2f69e26ca6ffebd70bb8fa5e8f6ff94c9a99caa38e723"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.261882Z",
+    "name": "deterministic_evaluation.json",
+    "sha256": "f1d95f3d9b9adb0e96e50876b958bbf2d809cd3cb942c7be4a7495a4ad9dda33"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.226888Z",
+    "name": "evaluation_plan.json",
+    "sha256": "5b35c1c1b6bb170e87b5d2dbd4c798f14afefbac881df8d95ae89af256310ce1"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.233574Z",
+    "name": "integration.json",
+    "sha256": "3b6b27b6a8861ee2843d7f6c34308d3ca3020f18534907c05538152c5aec3bf8"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.226125Z",
+    "name": "output_schema.json",
+    "sha256": "a2c799262a3ce3c19ef5cdd983bf3d12b43ab3c426227091b909dcb7054738c0"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.253688Z",
+    "name": "progress.json",
+    "sha256": "343ed6b5b6be5e50c918d22f02b16adf703de36a13375f879036537d7ab47628"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.262374Z",
+    "name": "qualitative_evaluation.json",
+    "sha256": "3aa1a711870e4195eea8946caba60c2339434a7831f5a7537f987b2a7a28db09"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.198041Z",
+    "name": "route_decision.json",
+    "sha256": "e4947cbb2e54aa03f4dd05ff0e5262d3a828aea0e9d5bcb6bae5b3f90ac76ebb"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.227502Z",
+    "name": "skill_spec.json",
+    "sha256": "d1848f2b923785e1032e32525e224472d2fb84726fce9503835a0f50151cb4df"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.254949Z",
+    "name": "training.json",
+    "sha256": "d2f7eced7eb4fd810cf89ff2d1f0359d9cd3964f53e28ec650975ed1d06b886b"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.246053Z",
+    "name": "validation.json",
+    "sha256": "eaf871651320488a2a66ceb56a47210e53223cefdb7704da3b3ad693cf0c1f7c"
+   }
+  ],
+  "created_at": "2026-10-18T11:10:28.197137Z",
+  "dataset_round": 2,
+  "deterministic_evaluation": {
+   "conditions": {
+    "base_no_skill": {
+     "field_f1": 0.5
+    },
+    "base_with_skill": {
+     "field_f1": 0.55
+    },
+    "lora_short_prompt": {
+     "field_f1": 0.54
+    }
+   },
+   "dev_feedback": {
+    "instruction": "repair DEV failures"
+   },
+   "passed": false
+  },
+  "evaluation_plan": {
+   "metric": "field_f1"
+  },
+  "events": [
+   {
+    "event_id": "2d377383-b21a-462b-b215-b290c57d217e",
+    "from_status": null,
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "stage": "jev_router"
+    },
+    "occurred_at": "2026-10-18T11:10:28.197137Z",
+    "sequence": 1,
+    "to_status": "queued"
+   },
+   {
+    "event_id": "fa0fd300-6afc-49b9-b610-af3db21f7eee",
+    "from_status": "queued",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.200639Z",
+    "sequence": 2,
+    "to_status": "architecting"
+   },
+   {
+    "event_id": "bcfc045a-e84b-4700-8bff-826c34938c4d",
+    "from_status": "architecting",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.228722Z",
+    "sequence": 3,
+    "to_status": "integrating"
+   },
+   {
+    "event_id": "ace8d18a-b1c3-4fb5-96a4-6ff2c6319b80",
+    "from_status": "integrating",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.234125Z",
+    "sequence": 4,
+    "to_status": "building_dataset"
+   },
+   {
+    "event_id": "c13c06bf-a65e-4eb5-a7c0-e77d55216cf2",
+    "from_status": "building_dataset",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.240258Z",
+    "sequence": 5,
+    "to_status": "validating"
+   },
+   {
+    "event_id": "af3627fa-af0e-4e86-a128-cf4df80b52f4",
+    "from_status": "validating",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.246579Z",
+    "sequence": 6,
+    "to_status": "awaiting_compute"
+   },
+   {
+    "event_id": "20bac4d9-b89b-4d50-a984-08e93d39211a",
+    "from_status": "awaiting_compute",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "budget_checked": true,
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.249929Z",
+    "sequence": 7,
+    "to_status": "provisioning_gpu"
+   },
+   {
+    "event_id": "bbfaa60c-4847-4410-af30-1cb6b432969f",
+    "from_status": "provisioning_gpu",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.251785Z",
+    "sequence": 8,
+    "to_status": "training"
+   },
+   {
+    "event_id": "1c93ed25-9267-44c3-9b2f-838b44cecaed",
+    "from_status": "training",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "progress": {
+      "current": 1,
+      "percent": 100,
+      "stage": "training",
+      "total": 1
+     }
+    },
+    "occurred_at": "2026-10-18T11:10:28.253688Z",
+    "sequence": 9,
+    "to_status": "training"
+   },
+   {
+    "event_id": "932943d2-0205-466e-aaf1-5cac6e8d3754",
+    "from_status": "training",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.255488Z",
+    "sequence": 10,
+    "to_status": "evaluating"
+   },
+   {
+    "event_id": "d066f99f-7e95-4fc6-832b-f3820291261a",
+    "from_status": "evaluating",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.262936Z",
+    "sequence": 11,
+    "to_status": "building_dataset"
+   }
+  ],
+  "failure_code": null,
+  "failure_message": null,
+  "idempotency_key": "fixture-factory-stages",
+  "integration": {
+   "evidence_type": "session",
+   "pull_request_url": null,
+   "session_id": "devin-session-1",
+   "status": "completed"
+  },
+  "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+  "output_schema": {
+   "type": "object"
+  },
+  "progress": {
+   "current": 1,
+   "percent": 100,
+   "stage": "training",
+   "total": 1
+  },
+  "route": {
+   "confidence": 0.9,
+   "decision": "create_adapter",
+   "reason": "synthetic fixture"
+  },
+  "skill_id": "expense-report",
+  "skill_spec": {
+   "description": "Turn receipts into an expense report.",
+   "name": "expense-report",
+   "workflow": "Synthetic: turn receipt text into an expense report."
+  },
+  "stage_attempts": [
+   {
+    "claimed_at": "2026-10-18T11:10:28.200639Z",
+    "completed_at": "2026-10-18T11:10:28.228722Z",
+    "round": 1,
+    "stage": "skill_architect",
+    "status": "completed"
+   },
+   {
+    "claimed_at": "2026-10-18T11:10:28.231374Z",
+    "completed_at": "2026-10-18T11:10:28.234125Z",
+    "round": 1,
+    "stage": "skill_integration",
+    "status": "completed"
+   },
+   {
+    "claimed_at": "2026-10-18T11:10:28.237068Z",
+    "completed_at": "2026-10-18T11:10:28.240258Z",
+    "round": 1,
+    "stage": "data_builder",
+    "status": "completed"
+   },
+   {
+    "claimed_at": "2026-10-18T11:10:28.242693Z",
+    "completed_at": "2026-10-18T11:10:28.246579Z",
+    "round": 1,
+    "stage": "dataset_validator",
+    "status": "completed"
+   },
+   {
+    "claimed_at": "2026-10-18T11:10:28.251785Z",
+    "completed_at": "2026-10-18T11:10:28.255488Z",
+    "round": 1,
+    "stage": "adapter_training",
+    "status": "completed"
+   },
+   {
+    "claimed_at": "2026-10-18T11:10:28.259674Z",
+    "completed_at": "2026-10-18T11:10:28.262936Z",
+    "round": 1,
+    "stage": "independent_evaluator",
+    "status": "completed"
+   }
+  ],
+  "status": "building_dataset",
+  "updated_at": "2026-10-18T11:10:28.262936Z",
+  "validation": {
+   "counts": {
+    "dev": 1,
+    "ood": 1,
+    "test": 1,
+    "train": 1
+   },
+   "frozen_test_sha256": "frozen-test-hash",
+   "passed": true,
+   "round": 1
+  },
+  "workflow": "Synthetic: turn receipt text into an expense report.",
+  "workflow_hash": "0bbc79eb08ac888cd61faff718f4d617f220d848dee960f07c348e81b00a4eb7"
+ },
+ {
+  "agent_outputs": [
+   {
+    "agent": "JEV Router",
+    "output": {
+     "confidence": 0.9,
+     "decision": "create_adapter",
+     "reason": "synthetic fixture"
+    },
+    "source": "Supabase mirror",
+    "stage": "queued",
+    "summary": "Routing decision"
+   },
+   {
+    "agent": "Kimi K3 \u2014 Skill Architect",
+    "output": {
+     "evaluation_plan": {
+      "metric": "field_f1"
+     },
+     "output_schema": {
+      "type": "object"
+     },
+     "skill_spec": {
+      "description": "Turn receipts into an expense report.",
+      "name": "expense-report",
+      "workflow": "Synthetic: turn receipt text into an expense report."
+     }
+    },
+    "source": "Supabase mirror",
+    "stage": "architecting",
+    "summary": "Skill contract"
+   },
+   {
+    "agent": "Devin \u2014 Skill Integration",
+    "output": {
+     "evidence_type": "session",
+     "pull_request_url": null,
+     "session_id": "devin-session-1",
+     "status": "completed"
+    },
+    "source": "Supabase mirror",
+    "stage": "integrating",
+    "summary": "Implementation evidence"
+   },
+   {
+    "agent": "Kimi K3 \u2014 Data Builder",
+    "output": {
+     "counts": {
+      "dev": 1,
+      "ood": 1,
+      "test": 1,
+      "train": 1
+     },
+     "round": 1
+    },
+    "source": "Supabase mirror",
+    "stage": "building_dataset",
+    "summary": "Generated split counts"
+   },
+   {
+    "agent": "Dataset Validator",
+    "output": {
+     "counts": {
+      "dev": 1,
+      "ood": 1,
+      "test": 1,
+      "train": 1
+     },
+     "frozen_test_sha256": "frozen-test-hash",
+     "passed": true,
+     "round": 1
+    },
+    "source": "Supabase mirror",
+    "stage": "validating",
+    "summary": "Deterministic validation"
+   },
+   {
+    "agent": "RunPod Training Worker",
+    "output": {
+     "current": 1,
+     "percent": 100,
+     "stage": "training",
+     "total": 1
+    },
+    "source": "Supabase mirror",
+    "stage": "training",
+    "summary": "Live compute telemetry"
+   },
+   {
+    "agent": "Independent Evaluator",
+    "output": {
+     "conditions": {
+      "base_no_skill": {
+       "field_f1": 0.5
+      },
+      "base_with_skill": {
+       "field_f1": 0.55
+      },
+      "lora_short_prompt": {
+       "field_f1": 0.54
+      }
+     },
+     "dev_feedback": {
+      "instruction": "repair DEV failures"
+     },
+     "passed": false
+    },
+    "source": "Supabase mirror",
+    "stage": "evaluating",
+    "summary": "Base vs Skill vs LoRA"
+   }
+  ],
+  "artifacts": [
+   {
+    "created_at": "2026-10-18T11:10:28.239670Z",
+    "name": "dataset.json",
+    "sha256": "52b8213dc98bdb1533d2f69e26ca6ffebd70bb8fa5e8f6ff94c9a99caa38e723"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.261882Z",
+    "name": "deterministic_evaluation.json",
+    "sha256": "f1d95f3d9b9adb0e96e50876b958bbf2d809cd3cb942c7be4a7495a4ad9dda33"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.226888Z",
+    "name": "evaluation_plan.json",
+    "sha256": "5b35c1c1b6bb170e87b5d2dbd4c798f14afefbac881df8d95ae89af256310ce1"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.233574Z",
+    "name": "integration.json",
+    "sha256": "3b6b27b6a8861ee2843d7f6c34308d3ca3020f18534907c05538152c5aec3bf8"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.226125Z",
+    "name": "output_schema.json",
+    "sha256": "a2c799262a3ce3c19ef5cdd983bf3d12b43ab3c426227091b909dcb7054738c0"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.253688Z",
+    "name": "progress.json",
+    "sha256": "343ed6b5b6be5e50c918d22f02b16adf703de36a13375f879036537d7ab47628"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.262374Z",
+    "name": "qualitative_evaluation.json",
+    "sha256": "3aa1a711870e4195eea8946caba60c2339434a7831f5a7537f987b2a7a28db09"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.268767Z",
+    "name": "round-2/dataset.json",
+    "sha256": "666638487ebde1960548d84739c7b4c49b177d69b5ba9e00d64a1613a6afa32e"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.198041Z",
+    "name": "route_decision.json",
+    "sha256": "e4947cbb2e54aa03f4dd05ff0e5262d3a828aea0e9d5bcb6bae5b3f90ac76ebb"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.227502Z",
+    "name": "skill_spec.json",
+    "sha256": "d1848f2b923785e1032e32525e224472d2fb84726fce9503835a0f50151cb4df"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.254949Z",
+    "name": "training.json",
+    "sha256": "d2f7eced7eb4fd810cf89ff2d1f0359d9cd3964f53e28ec650975ed1d06b886b"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.246053Z",
+    "name": "validation.json",
+    "sha256": "eaf871651320488a2a66ceb56a47210e53223cefdb7704da3b3ad693cf0c1f7c"
+   }
+  ],
+  "created_at": "2026-10-18T11:10:28.197137Z",
+  "dataset_round": 2,
+  "deterministic_evaluation": {
+   "conditions": {
+    "base_no_skill": {
+     "field_f1": 0.5
+    },
+    "base_with_skill": {
+     "field_f1": 0.55
+    },
+    "lora_short_prompt": {
+     "field_f1": 0.54
+    }
+   },
+   "dev_feedback": {
+    "instruction": "repair DEV failures"
+   },
+   "passed": false
+  },
+  "evaluation_plan": {
+   "metric": "field_f1"
+  },
+  "events": [
+   {
+    "event_id": "2d377383-b21a-462b-b215-b290c57d217e",
+    "from_status": null,
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "stage": "jev_router"
+    },
+    "occurred_at": "2026-10-18T11:10:28.197137Z",
+    "sequence": 1,
+    "to_status": "queued"
+   },
+   {
+    "event_id": "fa0fd300-6afc-49b9-b610-af3db21f7eee",
+    "from_status": "queued",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.200639Z",
+    "sequence": 2,
+    "to_status": "architecting"
+   },
+   {
+    "event_id": "bcfc045a-e84b-4700-8bff-826c34938c4d",
+    "from_status": "architecting",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.228722Z",
+    "sequence": 3,
+    "to_status": "integrating"
+   },
+   {
+    "event_id": "ace8d18a-b1c3-4fb5-96a4-6ff2c6319b80",
+    "from_status": "integrating",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.234125Z",
+    "sequence": 4,
+    "to_status": "building_dataset"
+   },
+   {
+    "event_id": "c13c06bf-a65e-4eb5-a7c0-e77d55216cf2",
+    "from_status": "building_dataset",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.240258Z",
+    "sequence": 5,
+    "to_status": "validating"
+   },
+   {
+    "event_id": "af3627fa-af0e-4e86-a128-cf4df80b52f4",
+    "from_status": "validating",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.246579Z",
+    "sequence": 6,
+    "to_status": "awaiting_compute"
+   },
+   {
+    "event_id": "20bac4d9-b89b-4d50-a984-08e93d39211a",
+    "from_status": "awaiting_compute",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "budget_checked": true,
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.249929Z",
+    "sequence": 7,
+    "to_status": "provisioning_gpu"
+   },
+   {
+    "event_id": "bbfaa60c-4847-4410-af30-1cb6b432969f",
+    "from_status": "provisioning_gpu",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.251785Z",
+    "sequence": 8,
+    "to_status": "training"
+   },
+   {
+    "event_id": "1c93ed25-9267-44c3-9b2f-838b44cecaed",
+    "from_status": "training",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "progress": {
+      "current": 1,
+      "percent": 100,
+      "stage": "training",
+      "total": 1
+     }
+    },
+    "occurred_at": "2026-10-18T11:10:28.253688Z",
+    "sequence": 9,
+    "to_status": "training"
+   },
+   {
+    "event_id": "932943d2-0205-466e-aaf1-5cac6e8d3754",
+    "from_status": "training",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.255488Z",
+    "sequence": 10,
+    "to_status": "evaluating"
+   },
+   {
+    "event_id": "d066f99f-7e95-4fc6-832b-f3820291261a",
+    "from_status": "evaluating",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.262936Z",
+    "sequence": 11,
+    "to_status": "building_dataset"
+   },
+   {
+    "event_id": "90d0d536-b4e0-49e8-b01d-8b7ccba7d24b",
+    "from_status": "building_dataset",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 2
+    },
+    "occurred_at": "2026-10-18T11:10:28.269235Z",
+    "sequence": 12,
+    "to_status": "validating"
+   }
+  ],
+  "failure_code": null,
+  "failure_message": null,
+  "idempotency_key": "fixture-factory-stages",
+  "integration": {
+   "evidence_type": "session",
+   "pull_request_url": null,
+   "session_id": "devin-session-1",
+   "status": "completed"
+  },
+  "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+  "output_schema": {
+   "type": "object"
+  },
+  "progress": {
+   "current": 1,
+   "percent": 100,
+   "stage": "training",
+   "total": 1
+  },
+  "route": {
+   "confidence": 0.9,
+   "decision": "create_adapter",
+   "reason": "synthetic fixture"
+  },
+  "skill_id": "expense-report",
+  "skill_spec": {
+   "description": "Turn receipts into an expense report.",
+   "name": "expense-report",
+   "workflow": "Synthetic: turn receipt text into an expense report."
+  },
+  "stage_attempts": [
+   {
+    "claimed_at": "2026-10-18T11:10:28.200639Z",
+    "completed_at": "2026-10-18T11:10:28.228722Z",
+    "round": 1,
+    "stage": "skill_architect",
+    "status": "completed"
+   },
+   {
+    "claimed_at": "2026-10-18T11:10:28.231374Z",
+    "completed_at": "2026-10-18T11:10:28.234125Z",
+    "round": 1,
+    "stage": "skill_integration",
+    "status": "completed"
+   },
+   {
+    "claimed_at": "2026-10-18T11:10:28.237068Z",
+    "completed_at": "2026-10-18T11:10:28.240258Z",
+    "round": 1,
+    "stage": "data_builder",
+    "status": "completed"
+   },
+   {
+    "claimed_at": "2026-10-18T11:10:28.242693Z",
+    "completed_at": "2026-10-18T11:10:28.246579Z",
+    "round": 1,
+    "stage": "dataset_validator",
+    "status": "completed"
+   },
+   {
+    "claimed_at": "2026-10-18T11:10:28.251785Z",
+    "completed_at": "2026-10-18T11:10:28.255488Z",
+    "round": 1,
+    "stage": "adapter_training",
+    "status": "completed"
+   },
+   {
+    "claimed_at": "2026-10-18T11:10:28.259674Z",
+    "completed_at": "2026-10-18T11:10:28.262936Z",
+    "round": 1,
+    "stage": "independent_evaluator",
+    "status": "completed"
+   },
+   {
+    "claimed_at": "2026-10-18T11:10:28.265239Z",
+    "completed_at": "2026-10-18T11:10:28.269235Z",
+    "round": 2,
+    "stage": "data_builder",
+    "status": "completed"
+   }
+  ],
+  "status": "validating",
+  "updated_at": "2026-10-18T11:10:28.269235Z",
+  "validation": {
+   "counts": {
+    "dev": 1,
+    "ood": 1,
+    "test": 1,
+    "train": 1
+   },
+   "frozen_test_sha256": "frozen-test-hash",
+   "passed": true,
+   "round": 1
+  },
+  "workflow": "Synthetic: turn receipt text into an expense report.",
+  "workflow_hash": "0bbc79eb08ac888cd61faff718f4d617f220d848dee960f07c348e81b00a4eb7"
+ },
+ {
+  "agent_outputs": [
+   {
+    "agent": "JEV Router",
+    "output": {
+     "confidence": 0.9,
+     "decision": "create_adapter",
+     "reason": "synthetic fixture"
+    },
+    "source": "Supabase mirror",
+    "stage": "queued",
+    "summary": "Routing decision"
+   },
+   {
+    "agent": "Kimi K3 \u2014 Skill Architect",
+    "output": {
+     "evaluation_plan": {
+      "metric": "field_f1"
+     },
+     "output_schema": {
+      "type": "object"
+     },
+     "skill_spec": {
+      "description": "Turn receipts into an expense report.",
+      "name": "expense-report",
+      "workflow": "Synthetic: turn receipt text into an expense report."
+     }
+    },
+    "source": "Supabase mirror",
+    "stage": "architecting",
+    "summary": "Skill contract"
+   },
+   {
+    "agent": "Devin \u2014 Skill Integration",
+    "output": {
+     "evidence_type": "session",
+     "pull_request_url": null,
+     "session_id": "devin-session-1",
+     "status": "completed"
+    },
+    "source": "Supabase mirror",
+    "stage": "integrating",
+    "summary": "Implementation evidence"
+   },
+   {
+    "agent": "Kimi K3 \u2014 Data Builder",
+    "output": {
+     "counts": {
+      "dev": 1,
+      "ood": 1,
+      "test": 1,
+      "train": 1
+     },
+     "round": 2
+    },
+    "source": "Supabase mirror",
+    "stage": "building_dataset",
+    "summary": "Generated split counts"
+   },
+   {
+    "agent": "Dataset Validator",
+    "output": {
+     "counts": {
+      "dev": 1,
+      "ood": 1,
+      "test": 1,
+      "train": 1
+     },
+     "frozen_test_sha256": "frozen-test-hash",
+     "passed": true,
+     "round": 2
+    },
+    "source": "Supabase mirror",
+    "stage": "validating",
+    "summary": "Deterministic validation"
+   },
+   {
+    "agent": "RunPod Training Worker",
+    "output": {
+     "current": 1,
+     "percent": 100,
+     "stage": "training",
+     "total": 1
+    },
+    "source": "Supabase mirror",
+    "stage": "training",
+    "summary": "Live compute telemetry"
+   },
+   {
+    "agent": "Independent Evaluator",
+    "output": {
+     "conditions": {
+      "base_no_skill": {
+       "field_f1": 0.5
+      },
+      "base_with_skill": {
+       "field_f1": 0.55
+      },
+      "lora_short_prompt": {
+       "field_f1": 0.54
+      }
+     },
+     "dev_feedback": {
+      "instruction": "repair DEV failures"
+     },
+     "passed": false
+    },
+    "source": "Supabase mirror",
+    "stage": "evaluating",
+    "summary": "Base vs Skill vs LoRA"
+   }
+  ],
+  "artifacts": [
+   {
+    "created_at": "2026-10-18T11:10:28.239670Z",
+    "name": "dataset.json",
+    "sha256": "52b8213dc98bdb1533d2f69e26ca6ffebd70bb8fa5e8f6ff94c9a99caa38e723"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.261882Z",
+    "name": "deterministic_evaluation.json",
+    "sha256": "f1d95f3d9b9adb0e96e50876b958bbf2d809cd3cb942c7be4a7495a4ad9dda33"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.226888Z",
+    "name": "evaluation_plan.json",
+    "sha256": "5b35c1c1b6bb170e87b5d2dbd4c798f14afefbac881df8d95ae89af256310ce1"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.233574Z",
+    "name": "integration.json",
+    "sha256": "3b6b27b6a8861ee2843d7f6c34308d3ca3020f18534907c05538152c5aec3bf8"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.226125Z",
+    "name": "output_schema.json",
+    "sha256": "a2c799262a3ce3c19ef5cdd983bf3d12b43ab3c426227091b909dcb7054738c0"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.253688Z",
+    "name": "progress.json",
+    "sha256": "343ed6b5b6be5e50c918d22f02b16adf703de36a13375f879036537d7ab47628"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.262374Z",
+    "name": "qualitative_evaluation.json",
+    "sha256": "3aa1a711870e4195eea8946caba60c2339434a7831f5a7537f987b2a7a28db09"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.268767Z",
+    "name": "round-2/dataset.json",
+    "sha256": "666638487ebde1960548d84739c7b4c49b177d69b5ba9e00d64a1613a6afa32e"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.275272Z",
+    "name": "round-2/validation.json",
+    "sha256": "1c2d891a26d1bc69bf1382221ae0d088514ee1a8ead9a40efb7ce344e79e4ba2"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.198041Z",
+    "name": "route_decision.json",
+    "sha256": "e4947cbb2e54aa03f4dd05ff0e5262d3a828aea0e9d5bcb6bae5b3f90ac76ebb"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.227502Z",
+    "name": "skill_spec.json",
+    "sha256": "d1848f2b923785e1032e32525e224472d2fb84726fce9503835a0f50151cb4df"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.254949Z",
+    "name": "training.json",
+    "sha256": "d2f7eced7eb4fd810cf89ff2d1f0359d9cd3964f53e28ec650975ed1d06b886b"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.275773Z",
+    "name": "validation.json",
+    "sha256": "1c2d891a26d1bc69bf1382221ae0d088514ee1a8ead9a40efb7ce344e79e4ba2"
+   }
+  ],
+  "created_at": "2026-10-18T11:10:28.197137Z",
+  "dataset_round": 2,
+  "deterministic_evaluation": {
+   "conditions": {
+    "base_no_skill": {
+     "field_f1": 0.5
+    },
+    "base_with_skill": {
+     "field_f1": 0.55
+    },
+    "lora_short_prompt": {
+     "field_f1": 0.54
+    }
+   },
+   "dev_feedback": {
+    "instruction": "repair DEV failures"
+   },
+   "passed": false
+  },
+  "evaluation_plan": {
+   "metric": "field_f1"
+  },
+  "events": [
+   {
+    "event_id": "2d377383-b21a-462b-b215-b290c57d217e",
+    "from_status": null,
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "stage": "jev_router"
+    },
+    "occurred_at": "2026-10-18T11:10:28.197137Z",
+    "sequence": 1,
+    "to_status": "queued"
+   },
+   {
+    "event_id": "fa0fd300-6afc-49b9-b610-af3db21f7eee",
+    "from_status": "queued",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.200639Z",
+    "sequence": 2,
+    "to_status": "architecting"
+   },
+   {
+    "event_id": "bcfc045a-e84b-4700-8bff-826c34938c4d",
+    "from_status": "architecting",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.228722Z",
+    "sequence": 3,
+    "to_status": "integrating"
+   },
+   {
+    "event_id": "ace8d18a-b1c3-4fb5-96a4-6ff2c6319b80",
+    "from_status": "integrating",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.234125Z",
+    "sequence": 4,
+    "to_status": "building_dataset"
+   },
+   {
+    "event_id": "c13c06bf-a65e-4eb5-a7c0-e77d55216cf2",
+    "from_status": "building_dataset",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.240258Z",
+    "sequence": 5,
+    "to_status": "validating"
+   },
+   {
+    "event_id": "af3627fa-af0e-4e86-a128-cf4df80b52f4",
+    "from_status": "validating",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.246579Z",
+    "sequence": 6,
+    "to_status": "awaiting_compute"
+   },
+   {
+    "event_id": "20bac4d9-b89b-4d50-a984-08e93d39211a",
+    "from_status": "awaiting_compute",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "budget_checked": true,
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.249929Z",
+    "sequence": 7,
+    "to_status": "provisioning_gpu"
+   },
+   {
+    "event_id": "bbfaa60c-4847-4410-af30-1cb6b432969f",
+    "from_status": "provisioning_gpu",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.251785Z",
+    "sequence": 8,
+    "to_status": "training"
+   },
+   {
+    "event_id": "1c93ed25-9267-44c3-9b2f-838b44cecaed",
+    "from_status": "training",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "progress": {
+      "current": 1,
+      "percent": 100,
+      "stage": "training",
+      "total": 1
+     }
+    },
+    "occurred_at": "2026-10-18T11:10:28.253688Z",
+    "sequence": 9,
+    "to_status": "training"
+   },
+   {
+    "event_id": "932943d2-0205-466e-aaf1-5cac6e8d3754",
+    "from_status": "training",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.255488Z",
+    "sequence": 10,
+    "to_status": "evaluating"
+   },
+   {
+    "event_id": "d066f99f-7e95-4fc6-832b-f3820291261a",
+    "from_status": "evaluating",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.262936Z",
+    "sequence": 11,
+    "to_status": "building_dataset"
+   },
+   {
+    "event_id": "90d0d536-b4e0-49e8-b01d-8b7ccba7d24b",
+    "from_status": "building_dataset",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 2
+    },
+    "occurred_at": "2026-10-18T11:10:28.269235Z",
+    "sequence": 12,
+    "to_status": "validating"
+   },
+   {
+    "event_id": "4c1a0df4-c973-4f9d-90c7-0204562ea055",
+    "from_status": "validating",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 2
+    },
+    "occurred_at": "2026-10-18T11:10:28.276229Z",
+    "sequence": 13,
+    "to_status": "awaiting_compute"
+   }
+  ],
+  "failure_code": null,
+  "failure_message": null,
+  "idempotency_key": "fixture-factory-stages",
+  "integration": {
+   "evidence_type": "session",
+   "pull_request_url": null,
+   "session_id": "devin-session-1",
+   "status": "completed"
+  },
+  "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+  "output_schema": {
+   "type": "object"
+  },
+  "progress": {
+   "current": 1,
+   "percent": 100,
+   "stage": "training",
+   "total": 1
+  },
+  "route": {
+   "confidence": 0.9,
+   "decision": "create_adapter",
+   "reason": "synthetic fixture"
+  },
+  "skill_id": "expense-report",
+  "skill_spec": {
+   "description": "Turn receipts into an expense report.",
+   "name": "expense-report",
+   "workflow": "Synthetic: turn receipt text into an expense report."
+  },
+  "stage_attempts": [
+   {
+    "claimed_at": "2026-10-18T11:10:28.200639Z",
+    "completed_at": "2026-10-18T11:10:28.228722Z",
+    "round": 1,
+    "stage": "skill_architect",
+    "status": "completed"
+   },
+   {
+    "claimed_at": "2026-10-18T11:10:28.231374Z",
+    "completed_at": "2026-10-18T11:10:28.234125Z",
+    "round": 1,
+    "stage": "skill_integration",
+    "status": "completed"
+   },
+   {
+    "claimed_at": "2026-10-18T11:10:28.237068Z",
+    "completed_at": "2026-10-18T11:10:28.240258Z",
+    "round": 1,
+    "stage": "data_builder",
+    "status": "completed"
+   },
+   {
+    "claimed_at": "2026-10-18T11:10:28.242693Z",
+    "completed_at": "2026-10-18T11:10:28.246579Z",
+    "round": 1,
+    "stage": "dataset_validator",
+    "status": "completed"
+   },
+   {
+    "claimed_at": "2026-10-18T11:10:28.251785Z",
+    "completed_at": "2026-10-18T11:10:28.255488Z",
+    "round": 1,
+    "stage": "adapter_training",
+    "status": "completed"
+   },
+   {
+    "claimed_at": "2026-10-18T11:10:28.259674Z",
+    "completed_at": "2026-10-18T11:10:28.262936Z",
+    "round": 1,
+    "stage": "independent_evaluator",
+    "status": "completed"
+   },
+   {
+    "claimed_at": "2026-10-18T11:10:28.265239Z",
+    "completed_at": "2026-10-18T11:10:28.269235Z",
+    "round": 2,
+    "stage": "data_builder",
+    "status": "completed"
+   },
+   {
+    "claimed_at": "2026-10-18T11:10:28.272007Z",
+    "completed_at": "2026-10-18T11:10:28.276229Z",
+    "round": 2,
+    "stage": "dataset_validator",
+    "status": "completed"
+   }
+  ],
+  "status": "awaiting_compute",
+  "updated_at": "2026-10-18T11:10:28.276229Z",
+  "validation": {
+   "counts": {
+    "dev": 1,
+    "ood": 1,
+    "test": 1,
+    "train": 1
+   },
+   "frozen_test_sha256": "frozen-test-hash",
+   "passed": true,
+   "round": 2
+  },
+  "workflow": "Synthetic: turn receipt text into an expense report.",
+  "workflow_hash": "0bbc79eb08ac888cd61faff718f4d617f220d848dee960f07c348e81b00a4eb7"
+ },
+ {
+  "agent_outputs": [
+   {
+    "agent": "JEV Router",
+    "output": {
+     "confidence": 0.9,
+     "decision": "create_adapter",
+     "reason": "synthetic fixture"
+    },
+    "source": "Supabase mirror",
+    "stage": "queued",
+    "summary": "Routing decision"
+   },
+   {
+    "agent": "Kimi K3 \u2014 Skill Architect",
+    "output": {
+     "evaluation_plan": {
+      "metric": "field_f1"
+     },
+     "output_schema": {
+      "type": "object"
+     },
+     "skill_spec": {
+      "description": "Turn receipts into an expense report.",
+      "name": "expense-report",
+      "workflow": "Synthetic: turn receipt text into an expense report."
+     }
+    },
+    "source": "Supabase mirror",
+    "stage": "architecting",
+    "summary": "Skill contract"
+   },
+   {
+    "agent": "Devin \u2014 Skill Integration",
+    "output": {
+     "evidence_type": "session",
+     "pull_request_url": null,
+     "session_id": "devin-session-1",
+     "status": "completed"
+    },
+    "source": "Supabase mirror",
+    "stage": "integrating",
+    "summary": "Implementation evidence"
+   },
+   {
+    "agent": "Kimi K3 \u2014 Data Builder",
+    "output": {
+     "counts": {
+      "dev": 1,
+      "ood": 1,
+      "test": 1,
+      "train": 1
+     },
+     "round": 2
+    },
+    "source": "Supabase mirror",
+    "stage": "building_dataset",
+    "summary": "Generated split counts"
+   },
+   {
+    "agent": "Dataset Validator",
+    "output": {
+     "counts": {
+      "dev": 1,
+      "ood": 1,
+      "test": 1,
+      "train": 1
+     },
+     "frozen_test_sha256": "frozen-test-hash",
+     "passed": true,
+     "round": 2
+    },
+    "source": "Supabase mirror",
+    "stage": "validating",
+    "summary": "Deterministic validation"
+   },
+   {
+    "agent": "RunPod Training Worker",
+    "output": {
+     "current": 1,
+     "percent": 100,
+     "stage": "training",
+     "total": 1
+    },
+    "source": "Supabase mirror",
+    "stage": "training",
+    "summary": "Live compute telemetry"
+   },
+   {
+    "agent": "Independent Evaluator",
+    "output": {
+     "conditions": {
+      "base_no_skill": {
+       "field_f1": 0.5
+      },
+      "base_with_skill": {
+       "field_f1": 0.55
+      },
+      "lora_short_prompt": {
+       "field_f1": 0.54
+      }
+     },
+     "dev_feedback": {
+      "instruction": "repair DEV failures"
+     },
+     "passed": false
+    },
+    "source": "Supabase mirror",
+    "stage": "evaluating",
+    "summary": "Base vs Skill vs LoRA"
+   }
+  ],
+  "artifacts": [
+   {
+    "created_at": "2026-10-18T11:10:28.239670Z",
+    "name": "dataset.json",
+    "sha256": "52b8213dc98bdb1533d2f69e26ca6ffebd70bb8fa5e8f6ff94c9a99caa38e723"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.261882Z",
+    "name": "deterministic_evaluation.json",
+    "sha256": "f1d95f3d9b9adb0e96e50876b958bbf2d809cd3cb942c7be4a7495a4ad9dda33"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.226888Z",
+    "name": "evaluation_plan.json",
+    "sha256": "5b35c1c1b6bb170e87b5d2dbd4c798f14afefbac881df8d95ae89af256310ce1"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.233574Z",
+    "name": "integration.json",
+    "sha256": "3b6b27b6a8861ee2843d7f6c34308d3ca3020f18534907c05538152c5aec3bf8"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.226125Z",
+    "name": "output_schema.json",
+    "sha256": "a2c799262a3ce3c19ef5cdd983bf3d12b43ab3c426227091b909dcb7054738c0"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.253688Z",
+    "name": "progress.json",
+    "sha256": "343ed6b5b6be5e50c918d22f02b16adf703de36a13375f879036537d7ab47628"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.262374Z",
+    "name": "qualitative_evaluation.json",
+    "sha256": "3aa1a711870e4195eea8946caba60c2339434a7831f5a7537f987b2a7a28db09"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.268767Z",
+    "name": "round-2/dataset.json",
+    "sha256": "666638487ebde1960548d84739c7b4c49b177d69b5ba9e00d64a1613a6afa32e"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.275272Z",
+    "name": "round-2/validation.json",
+    "sha256": "1c2d891a26d1bc69bf1382221ae0d088514ee1a8ead9a40efb7ce344e79e4ba2"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.198041Z",
+    "name": "route_decision.json",
+    "sha256": "e4947cbb2e54aa03f4dd05ff0e5262d3a828aea0e9d5bcb6bae5b3f90ac76ebb"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.227502Z",
+    "name": "skill_spec.json",
+    "sha256": "d1848f2b923785e1032e32525e224472d2fb84726fce9503835a0f50151cb4df"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.254949Z",
+    "name": "training.json",
+    "sha256": "d2f7eced7eb4fd810cf89ff2d1f0359d9cd3964f53e28ec650975ed1d06b886b"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.275773Z",
+    "name": "validation.json",
+    "sha256": "1c2d891a26d1bc69bf1382221ae0d088514ee1a8ead9a40efb7ce344e79e4ba2"
+   }
+  ],
+  "created_at": "2026-10-18T11:10:28.197137Z",
+  "dataset_round": 2,
+  "deterministic_evaluation": {
+   "conditions": {
+    "base_no_skill": {
+     "field_f1": 0.5
+    },
+    "base_with_skill": {
+     "field_f1": 0.55
+    },
+    "lora_short_prompt": {
+     "field_f1": 0.54
+    }
+   },
+   "dev_feedback": {
+    "instruction": "repair DEV failures"
+   },
+   "passed": false
+  },
+  "evaluation_plan": {
+   "metric": "field_f1"
+  },
+  "events": [
+   {
+    "event_id": "2d377383-b21a-462b-b215-b290c57d217e",
+    "from_status": null,
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "stage": "jev_router"
+    },
+    "occurred_at": "2026-10-18T11:10:28.197137Z",
+    "sequence": 1,
+    "to_status": "queued"
+   },
+   {
+    "event_id": "fa0fd300-6afc-49b9-b610-af3db21f7eee",
+    "from_status": "queued",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.200639Z",
+    "sequence": 2,
+    "to_status": "architecting"
+   },
+   {
+    "event_id": "bcfc045a-e84b-4700-8bff-826c34938c4d",
+    "from_status": "architecting",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.228722Z",
+    "sequence": 3,
+    "to_status": "integrating"
+   },
+   {
+    "event_id": "ace8d18a-b1c3-4fb5-96a4-6ff2c6319b80",
+    "from_status": "integrating",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.234125Z",
+    "sequence": 4,
+    "to_status": "building_dataset"
+   },
+   {
+    "event_id": "c13c06bf-a65e-4eb5-a7c0-e77d55216cf2",
+    "from_status": "building_dataset",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.240258Z",
+    "sequence": 5,
+    "to_status": "validating"
+   },
+   {
+    "event_id": "af3627fa-af0e-4e86-a128-cf4df80b52f4",
+    "from_status": "validating",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.246579Z",
+    "sequence": 6,
+    "to_status": "awaiting_compute"
+   },
+   {
+    "event_id": "20bac4d9-b89b-4d50-a984-08e93d39211a",
+    "from_status": "awaiting_compute",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "budget_checked": true,
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.249929Z",
+    "sequence": 7,
+    "to_status": "provisioning_gpu"
+   },
+   {
+    "event_id": "bbfaa60c-4847-4410-af30-1cb6b432969f",
+    "from_status": "provisioning_gpu",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.251785Z",
+    "sequence": 8,
+    "to_status": "training"
+   },
+   {
+    "event_id": "1c93ed25-9267-44c3-9b2f-838b44cecaed",
+    "from_status": "training",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "progress": {
+      "current": 1,
+      "percent": 100,
+      "stage": "training",
+      "total": 1
+     }
+    },
+    "occurred_at": "2026-10-18T11:10:28.253688Z",
+    "sequence": 9,
+    "to_status": "training"
+   },
+   {
+    "event_id": "932943d2-0205-466e-aaf1-5cac6e8d3754",
+    "from_status": "training",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.255488Z",
+    "sequence": 10,
+    "to_status": "evaluating"
+   },
+   {
+    "event_id": "d066f99f-7e95-4fc6-832b-f3820291261a",
+    "from_status": "evaluating",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.262936Z",
+    "sequence": 11,
+    "to_status": "building_dataset"
+   },
+   {
+    "event_id": "90d0d536-b4e0-49e8-b01d-8b7ccba7d24b",
+    "from_status": "building_dataset",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 2
+    },
+    "occurred_at": "2026-10-18T11:10:28.269235Z",
+    "sequence": 12,
+    "to_status": "validating"
+   },
+   {
+    "event_id": "4c1a0df4-c973-4f9d-90c7-0204562ea055",
+    "from_status": "validating",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 2
+    },
+    "occurred_at": "2026-10-18T11:10:28.276229Z",
+    "sequence": 13,
+    "to_status": "awaiting_compute"
+   },
+   {
+    "event_id": "9dd6a465-b7db-4282-a265-272b7b5ebd36",
+    "from_status": "awaiting_compute",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "budget_checked": true,
+     "round": 2
+    },
+    "occurred_at": "2026-10-18T11:10:28.281756Z",
+    "sequence": 14,
+    "to_status": "provisioning_gpu"
+   }
+  ],
+  "failure_code": null,
+  "failure_message": null,
+  "idempotency_key": "fixture-factory-stages",
+  "integration": {
+   "evidence_type": "session",
+   "pull_request_url": null,
+   "session_id": "devin-session-1",
+   "status": "completed"
+  },
+  "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+  "output_schema": {
+   "type": "object"
+  },
+  "progress": {
+   "current": 1,
+   "percent": 100,
+   "stage": "training",
+   "total": 1
+  },
+  "route": {
+   "confidence": 0.9,
+   "decision": "create_adapter",
+   "reason": "synthetic fixture"
+  },
+  "skill_id": "expense-report",
+  "skill_spec": {
+   "description": "Turn receipts into an expense report.",
+   "name": "expense-report",
+   "workflow": "Synthetic: turn receipt text into an expense report."
+  },
+  "stage_attempts": [
+   {
+    "claimed_at": "2026-10-18T11:10:28.200639Z",
+    "completed_at": "2026-10-18T11:10:28.228722Z",
+    "round": 1,
+    "stage": "skill_architect",
+    "status": "completed"
+   },
+   {
+    "claimed_at": "2026-10-18T11:10:28.231374Z",
+    "completed_at": "2026-10-18T11:10:28.234125Z",
+    "round": 1,
+    "stage": "skill_integration",
+    "status": "completed"
+   },
+   {
+    "claimed_at": "2026-10-18T11:10:28.237068Z",
+    "completed_at": "2026-10-18T11:10:28.240258Z",
+    "round": 1,
+    "stage": "data_builder",
+    "status": "completed"
+   },
+   {
+    "claimed_at": "2026-10-18T11:10:28.242693Z",
+    "completed_at": "2026-10-18T11:10:28.246579Z",
+    "round": 1,
+    "stage": "dataset_validator",
+    "status": "completed"
+   },
+   {
+    "claimed_at": "2026-10-18T11:10:28.251785Z",
+    "completed_at": "2026-10-18T11:10:28.255488Z",
+    "round": 1,
+    "stage": "adapter_training",
+    "status": "completed"
+   },
+   {
+    "claimed_at": "2026-10-18T11:10:28.259674Z",
+    "completed_at": "2026-10-18T11:10:28.262936Z",
+    "round": 1,
+    "stage": "independent_evaluator",
+    "status": "completed"
+   },
+   {
+    "claimed_at": "2026-10-18T11:10:28.265239Z",
+    "completed_at": "2026-10-18T11:10:28.269235Z",
+    "round": 2,
+    "stage": "data_builder",
+    "status": "completed"
+   },
+   {
+    "claimed_at": "2026-10-18T11:10:28.272007Z",
+    "completed_at": "2026-10-18T11:10:28.276229Z",
+    "round": 2,
+    "stage": "dataset_validator",
+    "status": "completed"
+   }
+  ],
+  "status": "provisioning_gpu",
+  "updated_at": "2026-10-18T11:10:28.281756Z",
+  "validation": {
+   "counts": {
+    "dev": 1,
+    "ood": 1,
+    "test": 1,
+    "train": 1
+   },
+   "frozen_test_sha256": "frozen-test-hash",
+   "passed": true,
+   "round": 2
+  },
+  "workflow": "Synthetic: turn receipt text into an expense report.",
+  "workflow_hash": "0bbc79eb08ac888cd61faff718f4d617f220d848dee960f07c348e81b00a4eb7"
+ },
+ {
+  "agent_outputs": [
+   {
+    "agent": "JEV Router",
+    "output": {
+     "confidence": 0.9,
+     "decision": "create_adapter",
+     "reason": "synthetic fixture"
+    },
+    "source": "Supabase mirror",
+    "stage": "queued",
+    "summary": "Routing decision"
+   },
+   {
+    "agent": "Kimi K3 \u2014 Skill Architect",
+    "output": {
+     "evaluation_plan": {
+      "metric": "field_f1"
+     },
+     "output_schema": {
+      "type": "object"
+     },
+     "skill_spec": {
+      "description": "Turn receipts into an expense report.",
+      "name": "expense-report",
+      "workflow": "Synthetic: turn receipt text into an expense report."
+     }
+    },
+    "source": "Supabase mirror",
+    "stage": "architecting",
+    "summary": "Skill contract"
+   },
+   {
+    "agent": "Devin \u2014 Skill Integration",
+    "output": {
+     "evidence_type": "session",
+     "pull_request_url": null,
+     "session_id": "devin-session-1",
+     "status": "completed"
+    },
+    "source": "Supabase mirror",
+    "stage": "integrating",
+    "summary": "Implementation evidence"
+   },
+   {
+    "agent": "Kimi K3 \u2014 Data Builder",
+    "output": {
+     "counts": {
+      "dev": 1,
+      "ood": 1,
+      "test": 1,
+      "train": 1
+     },
+     "round": 2
+    },
+    "source": "Supabase mirror",
+    "stage": "building_dataset",
+    "summary": "Generated split counts"
+   },
+   {
+    "agent": "Dataset Validator",
+    "output": {
+     "counts": {
+      "dev": 1,
+      "ood": 1,
+      "test": 1,
+      "train": 1
+     },
+     "frozen_test_sha256": "frozen-test-hash",
+     "passed": true,
+     "round": 2
+    },
+    "source": "Supabase mirror",
+    "stage": "validating",
+    "summary": "Deterministic validation"
+   },
+   {
+    "agent": "RunPod Training Worker",
+    "output": {
+     "current": 1,
+     "percent": 100,
+     "stage": "training",
+     "total": 1
+    },
+    "source": "Supabase mirror",
+    "stage": "training",
+    "summary": "Live compute telemetry"
+   },
+   {
+    "agent": "RunPod Training Worker",
+    "output": {
+     "base_model": "Qwen/Qwen3-VL-8B-Instruct",
+     "training_cost_usd": "0.10",
+     "version": "v2"
+    },
+    "source": "Supabase mirror",
+    "stage": "training",
+    "summary": "Saved training metrics"
+   },
+   {
+    "agent": "Independent Evaluator",
+    "output": {
+     "conditions": {
+      "base_no_skill": {
+       "field_f1": 0.5
+      },
+      "base_with_skill": {
+       "field_f1": 0.55
+      },
+      "lora_short_prompt": {
+       "field_f1": 0.54
+      }
+     },
+     "dev_feedback": {
+      "instruction": "repair DEV failures"
+     },
+     "passed": false
+    },
+    "source": "Supabase mirror",
+    "stage": "evaluating",
+    "summary": "Base vs Skill vs LoRA"
+   }
+  ],
+  "artifacts": [
+   {
+    "created_at": "2026-10-18T11:10:28.239670Z",
+    "name": "dataset.json",
+    "sha256": "52b8213dc98bdb1533d2f69e26ca6ffebd70bb8fa5e8f6ff94c9a99caa38e723"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.261882Z",
+    "name": "deterministic_evaluation.json",
+    "sha256": "f1d95f3d9b9adb0e96e50876b958bbf2d809cd3cb942c7be4a7495a4ad9dda33"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.226888Z",
+    "name": "evaluation_plan.json",
+    "sha256": "5b35c1c1b6bb170e87b5d2dbd4c798f14afefbac881df8d95ae89af256310ce1"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.233574Z",
+    "name": "integration.json",
+    "sha256": "3b6b27b6a8861ee2843d7f6c34308d3ca3020f18534907c05538152c5aec3bf8"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.226125Z",
+    "name": "output_schema.json",
+    "sha256": "a2c799262a3ce3c19ef5cdd983bf3d12b43ab3c426227091b909dcb7054738c0"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.285297Z",
+    "name": "progress.json",
+    "sha256": "343ed6b5b6be5e50c918d22f02b16adf703de36a13375f879036537d7ab47628"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.262374Z",
+    "name": "qualitative_evaluation.json",
+    "sha256": "3aa1a711870e4195eea8946caba60c2339434a7831f5a7537f987b2a7a28db09"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.268767Z",
+    "name": "round-2/dataset.json",
+    "sha256": "666638487ebde1960548d84739c7b4c49b177d69b5ba9e00d64a1613a6afa32e"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.286475Z",
+    "name": "round-2/training.json",
+    "sha256": "660a05329dd09c8c5a0e66802cc955a17684a884f0951eafc723690b6fd7de9b"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.275272Z",
+    "name": "round-2/validation.json",
+    "sha256": "1c2d891a26d1bc69bf1382221ae0d088514ee1a8ead9a40efb7ce344e79e4ba2"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.198041Z",
+    "name": "route_decision.json",
+    "sha256": "e4947cbb2e54aa03f4dd05ff0e5262d3a828aea0e9d5bcb6bae5b3f90ac76ebb"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.227502Z",
+    "name": "skill_spec.json",
+    "sha256": "d1848f2b923785e1032e32525e224472d2fb84726fce9503835a0f50151cb4df"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.254949Z",
+    "name": "training.json",
+    "sha256": "d2f7eced7eb4fd810cf89ff2d1f0359d9cd3964f53e28ec650975ed1d06b886b"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.275773Z",
+    "name": "validation.json",
+    "sha256": "1c2d891a26d1bc69bf1382221ae0d088514ee1a8ead9a40efb7ce344e79e4ba2"
+   }
+  ],
+  "created_at": "2026-10-18T11:10:28.197137Z",
+  "dataset_round": 2,
+  "deterministic_evaluation": {
+   "conditions": {
+    "base_no_skill": {
+     "field_f1": 0.5
+    },
+    "base_with_skill": {
+     "field_f1": 0.55
+    },
+    "lora_short_prompt": {
+     "field_f1": 0.54
+    }
+   },
+   "dev_feedback": {
+    "instruction": "repair DEV failures"
+   },
+   "passed": false
+  },
+  "evaluation_plan": {
+   "metric": "field_f1"
+  },
+  "events": [
+   {
+    "event_id": "2d377383-b21a-462b-b215-b290c57d217e",
+    "from_status": null,
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "stage": "jev_router"
+    },
+    "occurred_at": "2026-10-18T11:10:28.197137Z",
+    "sequence": 1,
+    "to_status": "queued"
+   },
+   {
+    "event_id": "fa0fd300-6afc-49b9-b610-af3db21f7eee",
+    "from_status": "queued",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.200639Z",
+    "sequence": 2,
+    "to_status": "architecting"
+   },
+   {
+    "event_id": "bcfc045a-e84b-4700-8bff-826c34938c4d",
+    "from_status": "architecting",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.228722Z",
+    "sequence": 3,
+    "to_status": "integrating"
+   },
+   {
+    "event_id": "ace8d18a-b1c3-4fb5-96a4-6ff2c6319b80",
+    "from_status": "integrating",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.234125Z",
+    "sequence": 4,
+    "to_status": "building_dataset"
+   },
+   {
+    "event_id": "c13c06bf-a65e-4eb5-a7c0-e77d55216cf2",
+    "from_status": "building_dataset",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.240258Z",
+    "sequence": 5,
+    "to_status": "validating"
+   },
+   {
+    "event_id": "af3627fa-af0e-4e86-a128-cf4df80b52f4",
+    "from_status": "validating",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.246579Z",
+    "sequence": 6,
+    "to_status": "awaiting_compute"
+   },
+   {
+    "event_id": "20bac4d9-b89b-4d50-a984-08e93d39211a",
+    "from_status": "awaiting_compute",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "budget_checked": true,
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.249929Z",
+    "sequence": 7,
+    "to_status": "provisioning_gpu"
+   },
+   {
+    "event_id": "bbfaa60c-4847-4410-af30-1cb6b432969f",
+    "from_status": "provisioning_gpu",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.251785Z",
+    "sequence": 8,
+    "to_status": "training"
+   },
+   {
+    "event_id": "1c93ed25-9267-44c3-9b2f-838b44cecaed",
+    "from_status": "training",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "progress": {
+      "current": 1,
+      "percent": 100,
+      "stage": "training",
+      "total": 1
+     }
+    },
+    "occurred_at": "2026-10-18T11:10:28.253688Z",
+    "sequence": 9,
+    "to_status": "training"
+   },
+   {
+    "event_id": "932943d2-0205-466e-aaf1-5cac6e8d3754",
+    "from_status": "training",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.255488Z",
+    "sequence": 10,
+    "to_status": "evaluating"
+   },
+   {
+    "event_id": "d066f99f-7e95-4fc6-832b-f3820291261a",
+    "from_status": "evaluating",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.262936Z",
+    "sequence": 11,
+    "to_status": "building_dataset"
+   },
+   {
+    "event_id": "90d0d536-b4e0-49e8-b01d-8b7ccba7d24b",
+    "from_status": "building_dataset",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 2
+    },
+    "occurred_at": "2026-10-18T11:10:28.269235Z",
+    "sequence": 12,
+    "to_status": "validating"
+   },
+   {
+    "event_id": "4c1a0df4-c973-4f9d-90c7-0204562ea055",
+    "from_status": "validating",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 2
+    },
+    "occurred_at": "2026-10-18T11:10:28.276229Z",
+    "sequence": 13,
+    "to_status": "awaiting_compute"
+   },
+   {
+    "event_id": "9dd6a465-b7db-4282-a265-272b7b5ebd36",
+    "from_status": "awaiting_compute",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "budget_checked": true,
+     "round": 2
+    },
+    "occurred_at": "2026-10-18T11:10:28.281756Z",
+    "sequence": 14,
+    "to_status": "provisioning_gpu"
+   },
+   {
+    "event_id": "c25073f0-e6c5-493e-ad84-3e06759e1ea6",
+    "from_status": "provisioning_gpu",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 2
+    },
+    "occurred_at": "2026-10-18T11:10:28.283309Z",
+    "sequence": 15,
+    "to_status": "training"
+   },
+   {
+    "event_id": "fa4e0182-2f89-48c8-aafb-47d4424357a0",
+    "from_status": "training",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "progress": {
+      "current": 1,
+      "percent": 100,
+      "stage": "training",
+      "total": 1
+     }
+    },
+    "occurred_at": "2026-10-18T11:10:28.285297Z",
+    "sequence": 16,
+    "to_status": "training"
+   },
+   {
+    "event_id": "3ad74380-2b27-4c8e-a59b-e4cb1bbacdb5",
+    "from_status": "training",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 2
+    },
+    "occurred_at": "2026-10-18T11:10:28.286990Z",
+    "sequence": 17,
+    "to_status": "evaluating"
+   }
+  ],
+  "failure_code": null,
+  "failure_message": null,
+  "idempotency_key": "fixture-factory-stages",
+  "integration": {
+   "evidence_type": "session",
+   "pull_request_url": null,
+   "session_id": "devin-session-1",
+   "status": "completed"
+  },
+  "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+  "output_schema": {
+   "type": "object"
+  },
+  "progress": {
+   "current": 1,
+   "percent": 100,
+   "stage": "training",
+   "total": 1
+  },
+  "route": {
+   "confidence": 0.9,
+   "decision": "create_adapter",
+   "reason": "synthetic fixture"
+  },
+  "skill_id": "expense-report",
+  "skill_spec": {
+   "description": "Turn receipts into an expense report.",
+   "name": "expense-report",
+   "workflow": "Synthetic: turn receipt text into an expense report."
+  },
+  "stage_attempts": [
+   {
+    "claimed_at": "2026-10-18T11:10:28.200639Z",
+    "completed_at": "2026-10-18T11:10:28.228722Z",
+    "round": 1,
+    "stage": "skill_architect",
+    "status": "completed"
+   },
+   {
+    "claimed_at": "2026-10-18T11:10:28.231374Z",
+    "completed_at": "2026-10-18T11:10:28.234125Z",
+    "round": 1,
+    "stage": "skill_integration",
+    "status": "completed"
+   },
+   {
+    "claimed_at": "2026-10-18T11:10:28.237068Z",
+    "completed_at": "2026-10-18T11:10:28.240258Z",
+    "round": 1,
+    "stage": "data_builder",
+    "status": "completed"
+   },
+   {
+    "claimed_at": "2026-10-18T11:10:28.242693Z",
+    "completed_at": "2026-10-18T11:10:28.246579Z",
+    "round": 1,
+    "stage": "dataset_validator",
+    "status": "completed"
+   },
+   {
+    "claimed_at": "2026-10-18T11:10:28.251785Z",
+    "completed_at": "2026-10-18T11:10:28.255488Z",
+    "round": 1,
+    "stage": "adapter_training",
+    "status": "completed"
+   },
+   {
+    "claimed_at": "2026-10-18T11:10:28.259674Z",
+    "completed_at": "2026-10-18T11:10:28.262936Z",
+    "round": 1,
+    "stage": "independent_evaluator",
+    "status": "completed"
+   },
+   {
+    "claimed_at": "2026-10-18T11:10:28.265239Z",
+    "completed_at": "2026-10-18T11:10:28.269235Z",
+    "round": 2,
+    "stage": "data_builder",
+    "status": "completed"
+   },
+   {
+    "claimed_at": "2026-10-18T11:10:28.272007Z",
+    "completed_at": "2026-10-18T11:10:28.276229Z",
+    "round": 2,
+    "stage": "dataset_validator",
+    "status": "completed"
+   },
+   {
+    "claimed_at": "2026-10-18T11:10:28.283309Z",
+    "completed_at": "2026-10-18T11:10:28.286990Z",
+    "round": 2,
+    "stage": "adapter_training",
+    "status": "completed"
+   }
+  ],
+  "status": "evaluating",
+  "training": {
+   "base_model": "Qwen/Qwen3-VL-8B-Instruct",
+   "training_cost_usd": "0.10",
+   "version": "v2"
+  },
+  "updated_at": "2026-10-18T11:10:28.286990Z",
+  "validation": {
+   "counts": {
+    "dev": 1,
+    "ood": 1,
+    "test": 1,
+    "train": 1
+   },
+   "frozen_test_sha256": "frozen-test-hash",
+   "passed": true,
+   "round": 2
+  },
+  "workflow": "Synthetic: turn receipt text into an expense report.",
+  "workflow_hash": "0bbc79eb08ac888cd61faff718f4d617f220d848dee960f07c348e81b00a4eb7"
+ },
+ {
+  "agent_outputs": [
+   {
+    "agent": "JEV Router",
+    "output": {
+     "confidence": 0.9,
+     "decision": "create_adapter",
+     "reason": "synthetic fixture"
+    },
+    "source": "Supabase mirror",
+    "stage": "queued",
+    "summary": "Routing decision"
+   },
+   {
+    "agent": "Kimi K3 \u2014 Skill Architect",
+    "output": {
+     "evaluation_plan": {
+      "metric": "field_f1"
+     },
+     "output_schema": {
+      "type": "object"
+     },
+     "skill_spec": {
+      "description": "Turn receipts into an expense report.",
+      "name": "expense-report",
+      "workflow": "Synthetic: turn receipt text into an expense report."
+     }
+    },
+    "source": "Supabase mirror",
+    "stage": "architecting",
+    "summary": "Skill contract"
+   },
+   {
+    "agent": "Devin \u2014 Skill Integration",
+    "output": {
+     "evidence_type": "session",
+     "pull_request_url": null,
+     "session_id": "devin-session-1",
+     "status": "completed"
+    },
+    "source": "Supabase mirror",
+    "stage": "integrating",
+    "summary": "Implementation evidence"
+   },
+   {
+    "agent": "Kimi K3 \u2014 Data Builder",
+    "output": {
+     "counts": {
+      "dev": 1,
+      "ood": 1,
+      "test": 1,
+      "train": 1
+     },
+     "round": 2
+    },
+    "source": "Supabase mirror",
+    "stage": "building_dataset",
+    "summary": "Generated split counts"
+   },
+   {
+    "agent": "Dataset Validator",
+    "output": {
+     "counts": {
+      "dev": 1,
+      "ood": 1,
+      "test": 1,
+      "train": 1
+     },
+     "frozen_test_sha256": "frozen-test-hash",
+     "passed": true,
+     "round": 2
+    },
+    "source": "Supabase mirror",
+    "stage": "validating",
+    "summary": "Deterministic validation"
+   },
+   {
+    "agent": "RunPod Training Worker",
+    "output": {
+     "current": 1,
+     "percent": 100,
+     "stage": "training",
+     "total": 1
+    },
+    "source": "Supabase mirror",
+    "stage": "training",
+    "summary": "Live compute telemetry"
+   },
+   {
+    "agent": "RunPod Training Worker",
+    "output": {
+     "base_model": "Qwen/Qwen3-VL-8B-Instruct",
+     "training_cost_usd": "0.10",
+     "version": "v2"
+    },
+    "source": "Supabase mirror",
+    "stage": "training",
+    "summary": "Saved training metrics"
+   },
+   {
+    "agent": "Independent Evaluator",
+    "output": {
+     "conditions": {
+      "base_no_skill": {
+       "field_f1": 0.5
+      },
+      "base_with_skill": {
+       "field_f1": 0.55
+      },
+      "lora_short_prompt": {
+       "field_f1": 0.7
+      }
+     },
+     "dev_feedback": {},
+     "passed": true
+    },
+    "source": "Supabase mirror",
+    "stage": "evaluating",
+    "summary": "Base vs Skill vs LoRA"
+   }
+  ],
+  "artifacts": [
+   {
+    "created_at": "2026-10-18T11:10:28.239670Z",
+    "name": "dataset.json",
+    "sha256": "52b8213dc98bdb1533d2f69e26ca6ffebd70bb8fa5e8f6ff94c9a99caa38e723"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.294505Z",
+    "name": "deterministic_evaluation.json",
+    "sha256": "1aa7d7d6a8f75b467f4f54b86c1b7701607174c03ad3fccdeeaa1d4cd9cec7d5"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.226888Z",
+    "name": "evaluation_plan.json",
+    "sha256": "5b35c1c1b6bb170e87b5d2dbd4c798f14afefbac881df8d95ae89af256310ce1"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.233574Z",
+    "name": "integration.json",
+    "sha256": "3b6b27b6a8861ee2843d7f6c34308d3ca3020f18534907c05538152c5aec3bf8"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.226125Z",
+    "name": "output_schema.json",
+    "sha256": "a2c799262a3ce3c19ef5cdd983bf3d12b43ab3c426227091b909dcb7054738c0"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.285297Z",
+    "name": "progress.json",
+    "sha256": "343ed6b5b6be5e50c918d22f02b16adf703de36a13375f879036537d7ab47628"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.262374Z",
+    "name": "qualitative_evaluation.json",
+    "sha256": "3aa1a711870e4195eea8946caba60c2339434a7831f5a7537f987b2a7a28db09"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.268767Z",
+    "name": "round-2/dataset.json",
+    "sha256": "666638487ebde1960548d84739c7b4c49b177d69b5ba9e00d64a1613a6afa32e"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.293799Z",
+    "name": "round-2/deterministic_evaluation.json",
+    "sha256": "1aa7d7d6a8f75b467f4f54b86c1b7701607174c03ad3fccdeeaa1d4cd9cec7d5"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.295120Z",
+    "name": "round-2/qualitative_evaluation.json",
+    "sha256": "3aa1a711870e4195eea8946caba60c2339434a7831f5a7537f987b2a7a28db09"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.286475Z",
+    "name": "round-2/training.json",
+    "sha256": "660a05329dd09c8c5a0e66802cc955a17684a884f0951eafc723690b6fd7de9b"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.275272Z",
+    "name": "round-2/validation.json",
+    "sha256": "1c2d891a26d1bc69bf1382221ae0d088514ee1a8ead9a40efb7ce344e79e4ba2"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.198041Z",
+    "name": "route_decision.json",
+    "sha256": "e4947cbb2e54aa03f4dd05ff0e5262d3a828aea0e9d5bcb6bae5b3f90ac76ebb"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.227502Z",
+    "name": "skill_spec.json",
+    "sha256": "d1848f2b923785e1032e32525e224472d2fb84726fce9503835a0f50151cb4df"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.254949Z",
+    "name": "training.json",
+    "sha256": "d2f7eced7eb4fd810cf89ff2d1f0359d9cd3964f53e28ec650975ed1d06b886b"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.275773Z",
+    "name": "validation.json",
+    "sha256": "1c2d891a26d1bc69bf1382221ae0d088514ee1a8ead9a40efb7ce344e79e4ba2"
+   }
+  ],
+  "created_at": "2026-10-18T11:10:28.197137Z",
+  "dataset_round": 2,
+  "deterministic_evaluation": {
+   "conditions": {
+    "base_no_skill": {
+     "field_f1": 0.5
+    },
+    "base_with_skill": {
+     "field_f1": 0.55
+    },
+    "lora_short_prompt": {
+     "field_f1": 0.7
+    }
+   },
+   "dev_feedback": {},
+   "passed": true
+  },
+  "evaluation_plan": {
+   "metric": "field_f1"
+  },
+  "events": [
+   {
+    "event_id": "2d377383-b21a-462b-b215-b290c57d217e",
+    "from_status": null,
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "stage": "jev_router"
+    },
+    "occurred_at": "2026-10-18T11:10:28.197137Z",
+    "sequence": 1,
+    "to_status": "queued"
+   },
+   {
+    "event_id": "fa0fd300-6afc-49b9-b610-af3db21f7eee",
+    "from_status": "queued",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.200639Z",
+    "sequence": 2,
+    "to_status": "architecting"
+   },
+   {
+    "event_id": "bcfc045a-e84b-4700-8bff-826c34938c4d",
+    "from_status": "architecting",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.228722Z",
+    "sequence": 3,
+    "to_status": "integrating"
+   },
+   {
+    "event_id": "ace8d18a-b1c3-4fb5-96a4-6ff2c6319b80",
+    "from_status": "integrating",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.234125Z",
+    "sequence": 4,
+    "to_status": "building_dataset"
+   },
+   {
+    "event_id": "c13c06bf-a65e-4eb5-a7c0-e77d55216cf2",
+    "from_status": "building_dataset",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.240258Z",
+    "sequence": 5,
+    "to_status": "validating"
+   },
+   {
+    "event_id": "af3627fa-af0e-4e86-a128-cf4df80b52f4",
+    "from_status": "validating",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.246579Z",
+    "sequence": 6,
+    "to_status": "awaiting_compute"
+   },
+   {
+    "event_id": "20bac4d9-b89b-4d50-a984-08e93d39211a",
+    "from_status": "awaiting_compute",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "budget_checked": true,
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.249929Z",
+    "sequence": 7,
+    "to_status": "provisioning_gpu"
+   },
+   {
+    "event_id": "bbfaa60c-4847-4410-af30-1cb6b432969f",
+    "from_status": "provisioning_gpu",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.251785Z",
+    "sequence": 8,
+    "to_status": "training"
+   },
+   {
+    "event_id": "1c93ed25-9267-44c3-9b2f-838b44cecaed",
+    "from_status": "training",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "progress": {
+      "current": 1,
+      "percent": 100,
+      "stage": "training",
+      "total": 1
+     }
+    },
+    "occurred_at": "2026-10-18T11:10:28.253688Z",
+    "sequence": 9,
+    "to_status": "training"
+   },
+   {
+    "event_id": "932943d2-0205-466e-aaf1-5cac6e8d3754",
+    "from_status": "training",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.255488Z",
+    "sequence": 10,
+    "to_status": "evaluating"
+   },
+   {
+    "event_id": "d066f99f-7e95-4fc6-832b-f3820291261a",
+    "from_status": "evaluating",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.262936Z",
+    "sequence": 11,
+    "to_status": "building_dataset"
+   },
+   {
+    "event_id": "90d0d536-b4e0-49e8-b01d-8b7ccba7d24b",
+    "from_status": "building_dataset",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 2
+    },
+    "occurred_at": "2026-10-18T11:10:28.269235Z",
+    "sequence": 12,
+    "to_status": "validating"
+   },
+   {
+    "event_id": "4c1a0df4-c973-4f9d-90c7-0204562ea055",
+    "from_status": "validating",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 2
+    },
+    "occurred_at": "2026-10-18T11:10:28.276229Z",
+    "sequence": 13,
+    "to_status": "awaiting_compute"
+   },
+   {
+    "event_id": "9dd6a465-b7db-4282-a265-272b7b5ebd36",
+    "from_status": "awaiting_compute",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "budget_checked": true,
+     "round": 2
+    },
+    "occurred_at": "2026-10-18T11:10:28.281756Z",
+    "sequence": 14,
+    "to_status": "provisioning_gpu"
+   },
+   {
+    "event_id": "c25073f0-e6c5-493e-ad84-3e06759e1ea6",
+    "from_status": "provisioning_gpu",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 2
+    },
+    "occurred_at": "2026-10-18T11:10:28.283309Z",
+    "sequence": 15,
+    "to_status": "training"
+   },
+   {
+    "event_id": "fa4e0182-2f89-48c8-aafb-47d4424357a0",
+    "from_status": "training",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "progress": {
+      "current": 1,
+      "percent": 100,
+      "stage": "training",
+      "total": 1
+     }
+    },
+    "occurred_at": "2026-10-18T11:10:28.285297Z",
+    "sequence": 16,
+    "to_status": "training"
+   },
+   {
+    "event_id": "3ad74380-2b27-4c8e-a59b-e4cb1bbacdb5",
+    "from_status": "training",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 2
+    },
+    "occurred_at": "2026-10-18T11:10:28.286990Z",
+    "sequence": 17,
+    "to_status": "evaluating"
+   },
+   {
+    "event_id": "bd3dd587-e445-45f0-8476-0de35588fdd3",
+    "from_status": "evaluating",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 2
+    },
+    "occurred_at": "2026-10-18T11:10:28.295793Z",
+    "sequence": 18,
+    "to_status": "publishing"
+   }
+  ],
+  "failure_code": null,
+  "failure_message": null,
+  "idempotency_key": "fixture-factory-stages",
+  "integration": {
+   "evidence_type": "session",
+   "pull_request_url": null,
+   "session_id": "devin-session-1",
+   "status": "completed"
+  },
+  "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+  "output_schema": {
+   "type": "object"
+  },
+  "progress": {
+   "current": 1,
+   "percent": 100,
+   "stage": "training",
+   "total": 1
+  },
+  "route": {
+   "confidence": 0.9,
+   "decision": "create_adapter",
+   "reason": "synthetic fixture"
+  },
+  "skill_id": "expense-report",
+  "skill_spec": {
+   "description": "Turn receipts into an expense report.",
+   "name": "expense-report",
+   "workflow": "Synthetic: turn receipt text into an expense report."
+  },
+  "stage_attempts": [
+   {
+    "claimed_at": "2026-10-18T11:10:28.200639Z",
+    "completed_at": "2026-10-18T11:10:28.228722Z",
+    "round": 1,
+    "stage": "skill_architect",
+    "status": "completed"
+   },
+   {
+    "claimed_at": "2026-10-18T11:10:28.231374Z",
+    "completed_at": "2026-10-18T11:10:28.234125Z",
+    "round": 1,
+    "stage": "skill_integration",
+    "status": "completed"
+   },
+   {
+    "claimed_at": "2026-10-18T11:10:28.237068Z",
+    "completed_at": "2026-10-18T11:10:28.240258Z",
+    "round": 1,
+    "stage": "data_builder",
+    "status": "completed"
+   },
+   {
+    "claimed_at": "2026-10-18T11:10:28.242693Z",
+    "completed_at": "2026-10-18T11:10:28.246579Z",
+    "round": 1,
+    "stage": "dataset_validator",
+    "status": "completed"
+   },
+   {
+    "claimed_at": "2026-10-18T11:10:28.251785Z",
+    "completed_at": "2026-10-18T11:10:28.255488Z",
+    "round": 1,
+    "stage": "adapter_training",
+    "status": "completed"
+   },
+   {
+    "claimed_at": "2026-10-18T11:10:28.259674Z",
+    "completed_at": "2026-10-18T11:10:28.262936Z",
+    "round": 1,
+    "stage": "independent_evaluator",
+    "status": "completed"
+   },
+   {
+    "claimed_at": "2026-10-18T11:10:28.265239Z",
+    "completed_at": "2026-10-18T11:10:28.269235Z",
+    "round": 2,
+    "stage": "data_builder",
+    "status": "completed"
+   },
+   {
+    "claimed_at": "2026-10-18T11:10:28.272007Z",
+    "completed_at": "2026-10-18T11:10:28.276229Z",
+    "round": 2,
+    "stage": "dataset_validator",
+    "status": "completed"
+   },
+   {
+    "claimed_at": "2026-10-18T11:10:28.283309Z",
+    "completed_at": "2026-10-18T11:10:28.286990Z",
+    "round": 2,
+    "stage": "adapter_training",
+    "status": "completed"
+   },
+   {
+    "claimed_at": "2026-10-18T11:10:28.290992Z",
+    "completed_at": "2026-10-18T11:10:28.295793Z",
+    "round": 2,
+    "stage": "independent_evaluator",
+    "status": "completed"
+   }
+  ],
+  "status": "publishing",
+  "training": {
+   "base_model": "Qwen/Qwen3-VL-8B-Instruct",
+   "training_cost_usd": "0.10",
+   "version": "v2"
+  },
+  "updated_at": "2026-10-18T11:10:28.295793Z",
+  "validation": {
+   "counts": {
+    "dev": 1,
+    "ood": 1,
+    "test": 1,
+    "train": 1
+   },
+   "frozen_test_sha256": "frozen-test-hash",
+   "passed": true,
+   "round": 2
+  },
+  "workflow": "Synthetic: turn receipt text into an expense report.",
+  "workflow_hash": "0bbc79eb08ac888cd61faff718f4d617f220d848dee960f07c348e81b00a4eb7"
+ },
+ {
+  "agent_outputs": [
+   {
+    "agent": "JEV Router",
+    "output": {
+     "confidence": 0.9,
+     "decision": "create_adapter",
+     "reason": "synthetic fixture"
+    },
+    "source": "Supabase mirror",
+    "stage": "queued",
+    "summary": "Routing decision"
+   },
+   {
+    "agent": "Kimi K3 \u2014 Skill Architect",
+    "output": {
+     "evaluation_plan": {
+      "metric": "field_f1"
+     },
+     "output_schema": {
+      "type": "object"
+     },
+     "skill_spec": {
+      "description": "Turn receipts into an expense report.",
+      "name": "expense-report",
+      "workflow": "Synthetic: turn receipt text into an expense report."
+     }
+    },
+    "source": "Supabase mirror",
+    "stage": "architecting",
+    "summary": "Skill contract"
+   },
+   {
+    "agent": "Devin \u2014 Skill Integration",
+    "output": {
+     "evidence_type": "session",
+     "pull_request_url": null,
+     "session_id": "devin-session-1",
+     "status": "completed"
+    },
+    "source": "Supabase mirror",
+    "stage": "integrating",
+    "summary": "Implementation evidence"
+   },
+   {
+    "agent": "Kimi K3 \u2014 Data Builder",
+    "output": {
+     "counts": {
+      "dev": 1,
+      "ood": 1,
+      "test": 1,
+      "train": 1
+     },
+     "round": 2
+    },
+    "source": "Supabase mirror",
+    "stage": "building_dataset",
+    "summary": "Generated split counts"
+   },
+   {
+    "agent": "Dataset Validator",
+    "output": {
+     "counts": {
+      "dev": 1,
+      "ood": 1,
+      "test": 1,
+      "train": 1
+     },
+     "frozen_test_sha256": "frozen-test-hash",
+     "passed": true,
+     "round": 2
+    },
+    "source": "Supabase mirror",
+    "stage": "validating",
+    "summary": "Deterministic validation"
+   },
+   {
+    "agent": "RunPod Training Worker",
+    "output": {
+     "current": 1,
+     "percent": 100,
+     "stage": "training",
+     "total": 1
+    },
+    "source": "Supabase mirror",
+    "stage": "training",
+    "summary": "Live compute telemetry"
+   },
+   {
+    "agent": "RunPod Training Worker",
+    "output": {
+     "base_model": "Qwen/Qwen3-VL-8B-Instruct",
+     "training_cost_usd": "0.10",
+     "version": "v2"
+    },
+    "source": "Supabase mirror",
+    "stage": "training",
+    "summary": "Saved training metrics"
+   },
+   {
+    "agent": "Independent Evaluator",
+    "output": {
+     "conditions": {
+      "base_no_skill": {
+       "field_f1": 0.5
+      },
+      "base_with_skill": {
+       "field_f1": 0.55
+      },
+      "lora_short_prompt": {
+       "field_f1": 0.7
+      }
+     },
+     "dev_feedback": {},
+     "passed": true
+    },
+    "source": "Supabase mirror",
+    "stage": "evaluating",
+    "summary": "Base vs Skill vs LoRA"
+   },
+   {
+    "agent": "Hugging Face Registry",
+    "output": {
+     "adapter": {
+      "adapter_id": "generated/expense-report/v2",
+      "artifact_uri": "hf://adityave/dapta-lora-adapters/generated/expense-report/v2",
+      "base_model": "Qwen/Qwen3-VL-8B-Instruct",
+      "created_at": "2026-10-18T11:10:28.304249Z",
+      "metadata": {
+       "benchmark_accuracy": 0.7,
+       "dataset_round": 2,
+       "description": "Turn receipts into an expense report.",
+       "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+       "name": "expense-report",
+       "training_cost_usd": "0.10"
+      },
+      "skill_id": "expense-report",
+      "version": "v2"
+     },
+     "artifact_uri": "hf://adityave/dapta-lora-adapters/generated/expense-report/v2"
+    },
+    "source": "Supabase mirror",
+    "stage": "publishing",
+    "summary": "Published adapter"
+   }
+  ],
+  "artifacts": [
+   {
+    "created_at": "2026-10-18T11:10:28.239670Z",
+    "name": "dataset.json",
+    "sha256": "52b8213dc98bdb1533d2f69e26ca6ffebd70bb8fa5e8f6ff94c9a99caa38e723"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.294505Z",
+    "name": "deterministic_evaluation.json",
+    "sha256": "1aa7d7d6a8f75b467f4f54b86c1b7701607174c03ad3fccdeeaa1d4cd9cec7d5"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.226888Z",
+    "name": "evaluation_plan.json",
+    "sha256": "5b35c1c1b6bb170e87b5d2dbd4c798f14afefbac881df8d95ae89af256310ce1"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.233574Z",
+    "name": "integration.json",
+    "sha256": "3b6b27b6a8861ee2843d7f6c34308d3ca3020f18534907c05538152c5aec3bf8"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.226125Z",
+    "name": "output_schema.json",
+    "sha256": "a2c799262a3ce3c19ef5cdd983bf3d12b43ab3c426227091b909dcb7054738c0"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.285297Z",
+    "name": "progress.json",
+    "sha256": "343ed6b5b6be5e50c918d22f02b16adf703de36a13375f879036537d7ab47628"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.305469Z",
+    "name": "publish_result.json",
+    "sha256": "e0e44c70d03f6fc9c308b30f9c7ad21a61793788033def9b710beeabc2bdabc8"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.262374Z",
+    "name": "qualitative_evaluation.json",
+    "sha256": "3aa1a711870e4195eea8946caba60c2339434a7831f5a7537f987b2a7a28db09"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.268767Z",
+    "name": "round-2/dataset.json",
+    "sha256": "666638487ebde1960548d84739c7b4c49b177d69b5ba9e00d64a1613a6afa32e"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.293799Z",
+    "name": "round-2/deterministic_evaluation.json",
+    "sha256": "1aa7d7d6a8f75b467f4f54b86c1b7701607174c03ad3fccdeeaa1d4cd9cec7d5"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.295120Z",
+    "name": "round-2/qualitative_evaluation.json",
+    "sha256": "3aa1a711870e4195eea8946caba60c2339434a7831f5a7537f987b2a7a28db09"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.286475Z",
+    "name": "round-2/training.json",
+    "sha256": "660a05329dd09c8c5a0e66802cc955a17684a884f0951eafc723690b6fd7de9b"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.275272Z",
+    "name": "round-2/validation.json",
+    "sha256": "1c2d891a26d1bc69bf1382221ae0d088514ee1a8ead9a40efb7ce344e79e4ba2"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.198041Z",
+    "name": "route_decision.json",
+    "sha256": "e4947cbb2e54aa03f4dd05ff0e5262d3a828aea0e9d5bcb6bae5b3f90ac76ebb"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.227502Z",
+    "name": "skill_spec.json",
+    "sha256": "d1848f2b923785e1032e32525e224472d2fb84726fce9503835a0f50151cb4df"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.254949Z",
+    "name": "training.json",
+    "sha256": "d2f7eced7eb4fd810cf89ff2d1f0359d9cd3964f53e28ec650975ed1d06b886b"
+   },
+   {
+    "created_at": "2026-10-18T11:10:28.275773Z",
+    "name": "validation.json",
+    "sha256": "1c2d891a26d1bc69bf1382221ae0d088514ee1a8ead9a40efb7ce344e79e4ba2"
+   }
+  ],
+  "created_at": "2026-10-18T11:10:28.197137Z",
+  "dataset_round": 2,
+  "deterministic_evaluation": {
+   "conditions": {
+    "base_no_skill": {
+     "field_f1": 0.5
+    },
+    "base_with_skill": {
+     "field_f1": 0.55
+    },
+    "lora_short_prompt": {
+     "field_f1": 0.7
+    }
+   },
+   "dev_feedback": {},
+   "passed": true
+  },
+  "evaluation_plan": {
+   "metric": "field_f1"
+  },
+  "events": [
+   {
+    "event_id": "2d377383-b21a-462b-b215-b290c57d217e",
+    "from_status": null,
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "stage": "jev_router"
+    },
+    "occurred_at": "2026-10-18T11:10:28.197137Z",
+    "sequence": 1,
+    "to_status": "queued"
+   },
+   {
+    "event_id": "fa0fd300-6afc-49b9-b610-af3db21f7eee",
+    "from_status": "queued",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.200639Z",
+    "sequence": 2,
+    "to_status": "architecting"
+   },
+   {
+    "event_id": "bcfc045a-e84b-4700-8bff-826c34938c4d",
+    "from_status": "architecting",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.228722Z",
+    "sequence": 3,
+    "to_status": "integrating"
+   },
+   {
+    "event_id": "ace8d18a-b1c3-4fb5-96a4-6ff2c6319b80",
+    "from_status": "integrating",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.234125Z",
+    "sequence": 4,
+    "to_status": "building_dataset"
+   },
+   {
+    "event_id": "c13c06bf-a65e-4eb5-a7c0-e77d55216cf2",
+    "from_status": "building_dataset",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.240258Z",
+    "sequence": 5,
+    "to_status": "validating"
+   },
+   {
+    "event_id": "af3627fa-af0e-4e86-a128-cf4df80b52f4",
+    "from_status": "validating",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.246579Z",
+    "sequence": 6,
+    "to_status": "awaiting_compute"
+   },
+   {
+    "event_id": "20bac4d9-b89b-4d50-a984-08e93d39211a",
+    "from_status": "awaiting_compute",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "budget_checked": true,
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.249929Z",
+    "sequence": 7,
+    "to_status": "provisioning_gpu"
+   },
+   {
+    "event_id": "bbfaa60c-4847-4410-af30-1cb6b432969f",
+    "from_status": "provisioning_gpu",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.251785Z",
+    "sequence": 8,
+    "to_status": "training"
+   },
+   {
+    "event_id": "1c93ed25-9267-44c3-9b2f-838b44cecaed",
+    "from_status": "training",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "progress": {
+      "current": 1,
+      "percent": 100,
+      "stage": "training",
+      "total": 1
+     }
+    },
+    "occurred_at": "2026-10-18T11:10:28.253688Z",
+    "sequence": 9,
+    "to_status": "training"
+   },
+   {
+    "event_id": "932943d2-0205-466e-aaf1-5cac6e8d3754",
+    "from_status": "training",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.255488Z",
+    "sequence": 10,
+    "to_status": "evaluating"
+   },
+   {
+    "event_id": "d066f99f-7e95-4fc6-832b-f3820291261a",
+    "from_status": "evaluating",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 1
+    },
+    "occurred_at": "2026-10-18T11:10:28.262936Z",
+    "sequence": 11,
+    "to_status": "building_dataset"
+   },
+   {
+    "event_id": "90d0d536-b4e0-49e8-b01d-8b7ccba7d24b",
+    "from_status": "building_dataset",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 2
+    },
+    "occurred_at": "2026-10-18T11:10:28.269235Z",
+    "sequence": 12,
+    "to_status": "validating"
+   },
+   {
+    "event_id": "4c1a0df4-c973-4f9d-90c7-0204562ea055",
+    "from_status": "validating",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 2
+    },
+    "occurred_at": "2026-10-18T11:10:28.276229Z",
+    "sequence": 13,
+    "to_status": "awaiting_compute"
+   },
+   {
+    "event_id": "9dd6a465-b7db-4282-a265-272b7b5ebd36",
+    "from_status": "awaiting_compute",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "budget_checked": true,
+     "round": 2
+    },
+    "occurred_at": "2026-10-18T11:10:28.281756Z",
+    "sequence": 14,
+    "to_status": "provisioning_gpu"
+   },
+   {
+    "event_id": "c25073f0-e6c5-493e-ad84-3e06759e1ea6",
+    "from_status": "provisioning_gpu",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 2
+    },
+    "occurred_at": "2026-10-18T11:10:28.283309Z",
+    "sequence": 15,
+    "to_status": "training"
+   },
+   {
+    "event_id": "fa4e0182-2f89-48c8-aafb-47d4424357a0",
+    "from_status": "training",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "progress": {
+      "current": 1,
+      "percent": 100,
+      "stage": "training",
+      "total": 1
+     }
+    },
+    "occurred_at": "2026-10-18T11:10:28.285297Z",
+    "sequence": 16,
+    "to_status": "training"
+   },
+   {
+    "event_id": "3ad74380-2b27-4c8e-a59b-e4cb1bbacdb5",
+    "from_status": "training",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 2
+    },
+    "occurred_at": "2026-10-18T11:10:28.286990Z",
+    "sequence": 17,
+    "to_status": "evaluating"
+   },
+   {
+    "event_id": "bd3dd587-e445-45f0-8476-0de35588fdd3",
+    "from_status": "evaluating",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 2
+    },
+    "occurred_at": "2026-10-18T11:10:28.295793Z",
+    "sequence": 18,
+    "to_status": "publishing"
+   },
+   {
+    "event_id": "7939cff1-b593-4e30-93ca-8fff4900e1b9",
+    "from_status": "publishing",
+    "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+    "metadata": {
+     "round": 2
+    },
+    "occurred_at": "2026-10-18T11:10:28.306992Z",
+    "sequence": 19,
+    "to_status": "ready"
+   }
+  ],
+  "failure_code": null,
+  "failure_message": null,
+  "idempotency_key": "fixture-factory-stages",
+  "integration": {
+   "evidence_type": "session",
+   "pull_request_url": null,
+   "session_id": "devin-session-1",
+   "status": "completed"
+  },
+  "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+  "output_schema": {
+   "type": "object"
+  },
+  "progress": {
+   "current": 1,
+   "percent": 100,
+   "stage": "training",
+   "total": 1
+  },
+  "publish_result": {
+   "adapter": {
+    "adapter_id": "generated/expense-report/v2",
+    "artifact_uri": "hf://adityave/dapta-lora-adapters/generated/expense-report/v2",
+    "base_model": "Qwen/Qwen3-VL-8B-Instruct",
+    "created_at": "2026-10-18T11:10:28.304249Z",
+    "metadata": {
+     "benchmark_accuracy": 0.7,
+     "dataset_round": 2,
+     "description": "Turn receipts into an expense report.",
+     "job_id": "cb95bb90-a7d5-401e-af35-eb3157930afb",
+     "name": "expense-report",
+     "training_cost_usd": "0.10"
+    },
+    "skill_id": "expense-report",
+    "version": "v2"
+   },
+   "artifact_uri": "hf://adityave/dapta-lora-adapters/generated/expense-report/v2"
+  },
+  "route": {
+   "confidence": 0.9,
+   "decision": "create_adapter",
+   "reason": "synthetic fixture"
+  },
+  "skill_id": "expense-report",
+  "skill_spec": {
+   "description": "Turn receipts into an expense report.",
+   "name": "expense-report",
+   "workflow": "Synthetic: turn receipt text into an expense report."
+  },
+  "stage_attempts": [
+   {
+    "claimed_at": "2026-10-18T11:10:28.200639Z",
+    "completed_at": "2026-10-18T11:10:28.228722Z",
+    "round": 1,
+    "stage": "skill_architect",
+    "status": "completed"
+   },
+   {
+    "claimed_at": "2026-10-18T11:10:28.231374Z",
+    "completed_at": "2026-10-18T11:10:28.234125Z",
+    "round": 1,
+    "stage": "skill_integration",
+    "status": "completed"
+   },
+   {
+    "claimed_at": "2026-10-18T11:10:28.237068Z",
+    "completed_at": "2026-10-18T11:10:28.240258Z",
+    "round": 1,
+    "stage": "data_builder",
+    "status": "completed"
+   },
+   {
+    "claimed_at": "2026-10-18T11:10:28.242693Z",
+    "completed_at": "2026-10-18T11:10:28.246579Z",
+    "round": 1,
+    "stage": "dataset_validator",
+    "status": "completed"
+   },
+   {
+    "claimed_at": "2026-10-18T11:10:28.251785Z",
+    "completed_at": "2026-10-18T11:10:28.255488Z",
+    "round": 1,
+    "stage": "adapter_training",
+    "status": "completed"
+   },
+   {
+    "claimed_at": "2026-10-18T11:10:28.259674Z",
+    "completed_at": "2026-10-18T11:10:28.262936Z",
+    "round": 1,
+    "stage": "independent_evaluator",
+    "status": "completed"
+   },
+   {
+    "claimed_at": "2026-10-18T11:10:28.265239Z",
+    "completed_at": "2026-10-18T11:10:28.269235Z",
+    "round": 2,
+    "stage": "data_builder",
+    "status": "completed"
+   },
+   {
+    "claimed_at": "2026-10-18T11:10:28.272007Z",
+    "completed_at": "2026-10-18T11:10:28.276229Z",
+    "round": 2,
+    "stage": "dataset_validator",
+    "status": "completed"
+   },
+   {
+    "claimed_at": "2026-10-18T11:10:28.283309Z",
+    "completed_at": "2026-10-18T11:10:28.286990Z",
+    "round": 2,
+    "stage": "adapter_training",
+    "status": "completed"
+   },
+   {
+    "claimed_at": "2026-10-18T11:10:28.290992Z",
+    "completed_at": "2026-10-18T11:10:28.295793Z",
+    "round": 2,
+    "stage": "independent_evaluator",
+    "status": "completed"
+   },
+   {
+    "claimed_at": "2026-10-18T11:10:28.303165Z",
+    "completed_at": "2026-10-18T11:10:28.306992Z",
+    "round": 2,
+    "stage": "registry_publish",
+    "status": "completed"
+   }
+  ],
+  "status": "ready",
+  "training": {
+   "base_model": "Qwen/Qwen3-VL-8B-Instruct",
+   "training_cost_usd": "0.10",
+   "version": "v2"
+  },
+  "updated_at": "2026-10-18T11:10:28.306992Z",
+  "validation": {
+   "counts": {
+    "dev": 1,
+    "ood": 1,
+    "test": 1,
+    "train": 1
+   },
+   "frozen_test_sha256": "frozen-test-hash",
+   "passed": true,
+   "round": 2
+  },
+  "workflow": "Synthetic: turn receipt text into an expense report.",
+  "workflow_hash": "0bbc79eb08ac888cd61faff718f4d617f220d848dee960f07c348e81b00a4eb7"
+ }
+]

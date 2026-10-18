@@ -13,6 +13,8 @@ from typing import Any
 from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 
+from .observability import initialize_sentry
+
 
 class GenerateRequest(BaseModel):
     run_id: str
@@ -146,6 +148,9 @@ async def lifespan(app: FastAPI):
     yield
 
 
+# Before the app is created, so Sentry's FastAPI integration continues the controller's trace
+# from the incoming sentry-trace/baggage headers on /generate.
+initialize_sentry(service="qwen-worker")
 app = FastAPI(title="Dapta Qwen Worker", lifespan=lifespan)
 
 
