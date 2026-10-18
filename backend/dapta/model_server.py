@@ -8,7 +8,7 @@ import re
 import threading
 import time
 from contextlib import asynccontextmanager
-from typing import Any
+from typing import Any, Optional
 
 from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
@@ -154,7 +154,7 @@ initialize_sentry(service="qwen-worker")
 app = FastAPI(title="Dapta Qwen Worker", lifespan=lifespan)
 
 
-def authorize(authorization: str | None = Header(default=None)) -> None:
+def authorize(authorization: Optional[str] = Header(default=None)) -> None:
     expected = os.environ.get("DAPTA_QWEN_TOKEN")
     if expected and authorization != f"Bearer {expected}":
         raise HTTPException(status_code=401, detail="unauthorized")

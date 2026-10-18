@@ -44,6 +44,10 @@ class JobConflict(ValueError):
     pass
 
 
+class EvaluationOutputTruncated(RuntimeError):
+    """The benchmark hit its generation ceiling and therefore is not scoreable."""
+
+
 class InvalidTransition(ValueError):
     pass
 
@@ -343,6 +347,64 @@ class JobStore:
             )
         return self.get_job(job_id)
 
+    def repair_truncated_evaluation(self, job_id: str) -> dict[str, Any]:
+        """Resume at benchmark evaluation without repeating data generation or training."""
+        now = _timestamp()
+        with self._connect(immediate=True) as connection:
+            current = connection.execute(
+                "SELECT status, failure_code, failure_message "
+                "FROM jobs WHERE job_id = ?", (job_id,)
+            ).fetchone()
+            if current is None:
+                raise JobNotFound(job_id)
+            is_truncation = current["failure_code"] == "EvaluationOutputTruncated" or (
+                current["failure_code"] in {"ValueError", "RuntimeError"}
+                and "evaluation_output_truncated" in (current["failure_message"] or "")
+            )
+            if current["status"] != "failed" or not is_truncation:
+                raise InvalidTransition("only a truncated evaluation can use benchmark-only repair")
+            attempt = connection.execute(
+                """
+                SELECT round FROM job_stage_attempts
+                WHERE job_id=? AND stage='independent_evaluator'
+                  AND status IN ('failed', 'completed')
+                ORDER BY round DESC, claimed_at DESC LIMIT 1
+                """,
+                (job_id,),
+            ).fetchone()
+            if attempt is None:
+                raise JobConflict("truncated evaluation has no resumable evaluator attempt")
+            # Re-open only the evaluator claim. This is the same recovery model
+            # used by retry_failed(), and preserves the original event history
+            # while allowing claim_stage() to reacquire the existing round.
+            connection.execute(
+                """
+                UPDATE job_stage_attempts
+                SET status='interrupted', completed_at=?
+                WHERE job_id=? AND stage='independent_evaluator' AND round=?
+                  AND status IN ('failed', 'completed')
+                """,
+                (now, job_id, attempt["round"]),
+            )
+            connection.execute(
+                """
+                UPDATE jobs SET status='evaluating', failure_code=NULL, failure_message=NULL,
+                                updated_at=? WHERE job_id=?
+                """,
+                (now, job_id),
+            )
+            connection.execute(
+                """
+                INSERT INTO job_events(event_id, job_id, from_status, to_status, occurred_at, metadata_json)
+                VALUES (?, ?, 'failed', 'evaluating', ?, ?)
+                """,
+                (str(uuid.uuid4()), job_id, now, _json({
+                    "benchmark_only_repair": True,
+                    "training_skipped": True,
+                })),
+            )
+        return self.get_job(job_id)
+
     def put_artifact(
         self, job_id: str, name: str, value: Any, *, created_at: str | None = None,
     ) -> dict[str, Any]:
@@ -544,6 +606,18 @@ class JobStore:
             if existing is not None and tuple(existing) == values:
                 return _adapter_dict(existing)
             raise JobConflict(f"adapter already exists: {adapter_id}") from error
+        return self.get_adapter(adapter_id)
+
+    def update_adapter(
+        self, *, adapter_id: str, artifact_uri: str, metadata: Mapping[str, Any]
+    ) -> dict[str, Any]:
+        with self._connect(immediate=True) as connection:
+            cursor = connection.execute(
+                "UPDATE adapters SET artifact_uri=?, metadata_json=? WHERE adapter_id=?",
+                (_required(artifact_uri, "artifact_uri"), _json(metadata), adapter_id),
+            )
+            if cursor.rowcount != 1:
+                raise JobNotFound(adapter_id)
         return self.get_adapter(adapter_id)
 
     def get_adapter(self, adapter_id: str) -> dict[str, Any]:
@@ -806,9 +880,12 @@ class AdapterJobOrchestrator:
         if self.evaluator is None:
             raise JobBlocked("evaluating: deterministic evaluator is not configured")
         def work() -> str:
+            training, training_round = self._latest_round_artifact(job_id, "training.json", round)
+            training = dict(training)
+            training["_source_round"] = training_round
             report = dict(self.evaluator.evaluate(
                 job=job, round=round,
-                training=self.store.get_artifact(job_id, _round_name("training.json", round)),
+                training=training,
             ))
             if not isinstance(report.get("passed"), bool):
                 raise ValueError("deterministic evaluation must include boolean passed")
@@ -821,9 +898,10 @@ class AdapterJobOrchestrator:
             if report["passed"]:
                 return "publishing"
             if report.get("repairable") is False:
-                raise ValueError(
-                    str(report.get("failure_reason") or "evaluation configuration failed")
-                )
+                reason = str(report.get("failure_reason") or "evaluation configuration failed")
+                if reason == "evaluation_output_truncated":
+                    raise EvaluationOutputTruncated(reason)
+                raise ValueError(reason)
             if round < self._round_limit():
                 return "building_dataset"
             raise ValueError(f"adapter failed evaluation after {round} data rounds")
@@ -834,7 +912,7 @@ class AdapterJobOrchestrator:
         round = job["dataset_round"]
         if self.publisher is None:
             raise JobBlocked("publishing: Hugging Face publisher is not configured")
-        training = self.store.get_artifact(job_id, _round_name("training.json", round))
+        training, _ = self._latest_round_artifact(job_id, "training.json", round)
         evaluation = self.store.get_artifact(job_id, _round_name("deterministic_evaluation.json", round))
         contract = self._contract(job_id)
         contract["integration"] = self.store.get_artifact(job_id, "integration.json")
@@ -844,18 +922,32 @@ class AdapterJobOrchestrator:
             )
             skill_id = job["skill_id"] or _skill_id(contract["skill_spec"], job["workflow_hash"])
             adapter_id = training.get("adapter_id") or f"generated/{skill_id}/{training['version']}"
-            adapter = self.store.register_adapter(
-                adapter_id=adapter_id, skill_id=skill_id, version=training["version"],
-                base_model=training["base_model"], artifact_uri=uri,
-                metadata={
-                    "name": contract["skill_spec"].get("name", skill_id),
-                    "description": contract["skill_spec"].get("description", job["workflow"][:240]),
-                    "job_id": job_id, "dataset_round": round,
-                    "benchmark_accuracy": evaluation.get("conditions", {}).get(
-                        "lora_short_prompt", {}).get("field_f1", 0),
-                    "training_cost_usd": training.get("training_cost_usd", "0"),
-                },
-            )
+            metadata = {
+                "name": contract["skill_spec"].get("name", skill_id),
+                "description": contract["skill_spec"].get("description", job["workflow"][:240]),
+                "job_id": job_id, "dataset_round": round,
+                "benchmark_accuracy": evaluation.get("conditions", {}).get(
+                    "lora_short_prompt", {}).get("field_f1", 0),
+                "benchmark_status": "verified" if evaluation.get("passed") else "needs_repair",
+                "evaluation_verified": bool(evaluation.get("passed")),
+                "training_cost_usd": training.get("training_cost_usd", "0"),
+            }
+            try:
+                adapter = self.store.register_adapter(
+                    adapter_id=adapter_id, skill_id=skill_id, version=training["version"],
+                    base_model=training["base_model"], artifact_uri=uri, metadata=metadata,
+                )
+            except JobConflict:
+                existing = self.store.get_adapter(adapter_id)
+                if (
+                    existing["skill_id"] != skill_id
+                    or existing["version"] != training["version"]
+                    or existing["base_model"] != training["base_model"]
+                ):
+                    raise
+                adapter = self.store.update_adapter(
+                    adapter_id=adapter_id, artifact_uri=uri, metadata=metadata,
+                )
             self.store.set_artifact(job_id, "publish_result.json", {
                 "adapter": adapter, "artifact_uri": uri,
             })
@@ -930,6 +1022,16 @@ class AdapterJobOrchestrator:
         return {name: self.store.get_artifact(job_id, f"{name}.json") for name in (
             "skill_spec", "output_schema", "evaluation_plan",
         )}
+
+    def _latest_round_artifact(
+        self, job_id: str, name: str, round: int
+    ) -> tuple[dict[str, Any], int]:
+        for candidate in range(round, 0, -1):
+            try:
+                return self.store.get_artifact(job_id, _round_name(name, candidate)), candidate
+            except JobNotFound:
+                continue
+        raise JobNotFound(f"{job_id}:{name}")
 
     def _feedback(self, job_id: str, round: int) -> dict[str, Any] | None:
         if round == 1:

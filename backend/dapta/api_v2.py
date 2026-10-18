@@ -102,7 +102,7 @@ def create_app(database_path: Path | str | None = None) -> FastAPI:
         integrator=DevinIntegrator(devin, store) if devin else None,
         dataset_source=AgentDatasetSource(agents) if agents else None,
         trainer=trainer,
-        evaluator=SavedEvaluation(),
+        evaluator=SavedEvaluation(regenerator=trainer.reevaluate if trainer else None),
         publisher=publisher,
     )
     supabase = _supabase_store()
@@ -326,6 +326,15 @@ def create_app(database_path: Path | str | None = None) -> FastAPI:
             job = store.retry_failed(job_id)
             runner.wake()
             return job
+        except (JobNotFound, InvalidTransition, JobConflict) as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+
+    @app.post("/v1/jobs/{job_id}/repair-evaluation", dependencies=protected)
+    def repair_job_evaluation(job_id: str) -> dict[str, Any]:
+        try:
+            job = store.repair_truncated_evaluation(job_id)
+            runner.wake()
+            return _job_with_usage(job, ledger)
         except (JobNotFound, InvalidTransition, JobConflict) as error:
             raise HTTPException(status_code=409, detail=str(error)) from error
 

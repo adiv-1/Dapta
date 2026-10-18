@@ -1,5 +1,9 @@
 # Dapta
 
+> New engineer or agent: start with [`docs/AGENT_HANDOFF.md`](docs/AGENT_HANDOFF.md)
+> and [`docs/TRAINING_RUNBOOK.md`](docs/TRAINING_RUNBOOK.md). They describe the
+> live deployment and the safe recovery path for paid GPU work.
+
 Dapta turns stable, repetitive workflows into measured LoRA specialists for
 `Qwen/Qwen3-VL-8B-Instruct`. It compares the adapter with configured frontier
 models on output quality, time, tokens, and cost, and preserves the evidence for
@@ -19,8 +23,9 @@ Implemented and tested:
 - deterministic schema, label, leakage, duplicate, split, and frozen-test validation.
 - RunPod single-GPU QLoRA training with a hard time/cost preflight, live telemetry,
   inference-model unload/reload, and exact GPU-active cost accounting.
-- independent base/base+Skill/LoRA evaluation, targeted DEV-only repair rounds,
-  and automatic Hugging Face publication after the quality gate passes.
+- independent base/base+Skill/LoRA evaluation, user-approved DEV-only quality
+  repairs, and benchmark-only regeneration when output truncation—not model
+  quality—invalidates a score.
 - private Supabase mirroring for factory stages and agent artifacts; uploaded
   judge documents, credentials, and internal reasoning are never mirrored.
 - RunPod controller/model worker with dynamic Hugging Face LoRA loading.
@@ -33,6 +38,12 @@ The NDA adapter is stored at
 `adityave/dapta-lora-adapters/nda-intake/qwen3-vl-8b-v1`. Its frozen benchmark
 improved field F1 from 57.58% (base) and 61.28% (base + Skill) to 70.75% with
 the LoRA; exact-form accuracy improved from 6.02% to 33.73%.
+
+The CSV cleaner/dashboard adapter is stored at
+`generated/csv-clean-dashboard-v1/v20261018093318`. Its weights and frozen test
+generations exist, but the original 768-token benchmark outputs were truncated.
+It is truthfully marked `needs_repair`; use evaluation-only repair rather than
+retraining it.
 
 Remaining external step: register the already-exposed tools as an
 ASI:One/Agentverse agent after the judging API is frozen.
@@ -49,7 +60,7 @@ Base44 secret proxy + durable snapshots
 FastAPI controller on RunPod
         |-- JEV: adapter routing
         |-- OpenRouter: Kimi, GPT-OSS, Claude, GPT
-        |-- Devin: tested skill integration PR
+        |-- Devin: scoped skill integration evidence (no GitHub writes)
         |-- Qwen worker: base model + selected LoRA
         |-- SQLite: cost, usage, jobs, benchmarks
         |-- Supabase: durable agent stages and artifacts
@@ -85,6 +96,7 @@ GET  /v1/adapters
 POST /v1/jobs
 GET  /v1/jobs/{id}
 GET  /v1/jobs/{id}/events
+POST /v1/jobs/{id}/repair-evaluation
 GET  /v1/agent/tools
 POST /v1/agent/tools/{tool_name}
 ```
@@ -116,8 +128,9 @@ server-side.
 Run verification:
 
 ```bash
-PYTHONPATH=backend .venv/bin/python -m unittest discover -s backend/tests -v
-cd frontend && npm run build
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=backend \
+  .venv/bin/python -m unittest discover -s backend/tests -v
+cd frontend && npm run build && npm test
 ```
 
 ## RunPod deployment
