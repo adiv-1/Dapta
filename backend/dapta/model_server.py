@@ -25,17 +25,21 @@ class GenerateRequest(BaseModel):
 
 NDA_ADAPTER_ID = "nda-intake/qwen3-vl-8b-v1"
 NDA_SHORT_SYSTEM = (
-    "Complete the NDA intake form using the learned workflow. Return JSON only."
+    "Complete the NDA intake form using the learned workflow. Return JSON only. "
+    "Use underscore-normalized strings; term must be a number_unit string, never a JSON number."
 )
 NDA_USER_INSTRUCTION = """Fill this NDA intake form.
 
 Return exactly:
 {
   "effective_date": "YYYY-MM-DD or null",
-  "jurisdiction": "jurisdiction or null",
-  "parties": ["party names"],
-  "term": "normalized term or null"
+  "jurisdiction": "normalized_jurisdiction or null",
+  "parties": ["normalized_party_names"],
+  "term": "number_unit or null"
 }
+
+Replace spaces and colons inside extracted values with underscores. The term is a string such as
+"3_years", not the number 3.
 
 NDA:
 """

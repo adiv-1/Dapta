@@ -181,5 +181,5 @@ Further project rationale and dataset research are in `docs/`.
 
 The live NDA comparison uses [`backend/dapta/skills/nda-intake/SKILL.md`](backend/dapta/skills/nda-intake/SKILL.md)
 as its source of truth. Claude and GPT receive the complete skill; the LoRA adapter receives the
-compact four-field prompt used by its frozen benchmark. All three must return exactly
+compact four-field inference prompt derived from its frozen benchmark contract. All three must return exactly
 `effective_date`, `jurisdiction`, `parties`, and `term`.

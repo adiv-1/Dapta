@@ -4,7 +4,7 @@ from dapta.model_server import GenerateRequest, NDA_SHORT_SYSTEM, NDA_USER_INSTR
 
 
 class ModelServerPromptTests(unittest.TestCase):
-    def test_nda_adapter_uses_the_frozen_benchmark_prompt_contract(self):
+    def test_nda_adapter_uses_the_compact_benchmark_contract_with_schema_guardrails(self):
         request = GenerateRequest(
             run_id="run-1",
             workflow="Extract an NDA",
@@ -16,6 +16,8 @@ class ModelServerPromptTests(unittest.TestCase):
         self.assertEqual(messages[1]["content"], NDA_USER_INSTRUCTION + request.document_text)
         self.assertIn('"effective_date"', messages[1]["content"])
         self.assertIn('"parties"', messages[1]["content"])
+        self.assertIn("never a JSON number", messages[0]["content"])
+        self.assertIn('"3_years"', messages[1]["content"])
 
     def test_other_adapters_keep_the_generic_workflow_prompt(self):
         request = GenerateRequest(
