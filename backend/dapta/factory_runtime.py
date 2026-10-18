@@ -9,6 +9,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
 from pathlib import Path
@@ -23,6 +24,11 @@ from .jobs import (
 )
 from .ledger import UsageLedger
 from .observability import capture_exception, root_transaction, span
+
+
+def training_allocation_id(job_id: str, round: int) -> str:
+    """Return a unique billable allocation ID for each training attempt."""
+    return f"runpod:{job_id}:round-{round}:attempt-{uuid.uuid4().hex[:12]}"
 
 
 class AgentDatasetSource:
@@ -261,7 +267,7 @@ class RunPodTrainingBackend:
             bundle["skill_contract"][name] = self._artifact(job_id, name)
         bundle_path = run_dir / "bundle.json"
         bundle_path.write_text(json.dumps(bundle, ensure_ascii=False), encoding="utf-8")
-        allocation_id = f"runpod:{job_id}:round-{round}"
+        allocation_id = training_allocation_id(job_id, round)
         started = _now()
         self.ledger.register_compute(
             run_id=job_id,
