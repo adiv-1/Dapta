@@ -297,6 +297,11 @@ class FactoryAgents:
     def _run(
         self, definition: AgentDefinition, *, run_id: str, payload: Mapping[str, Any]
     ) -> dict[str, Any]:
+        reasoning_effort = None
+        if definition.name == "data_builder":
+            reasoning_effort = os.environ.get(
+                "OPENROUTER_DATA_BUILDER_REASONING_EFFORT", "none"
+            )
         return self.client.complete_json(
             run_id=run_id,
             stage=definition.stage,
@@ -310,6 +315,7 @@ class FactoryAgents:
                 },
             ],
             max_tokens=definition.max_tokens,
+            reasoning_effort=reasoning_effort,
         )
 
 
@@ -320,6 +326,20 @@ def _response_json(response: Mapping[str, Any]) -> dict[str, Any]:
         raise OpenRouterError("OpenRouter response did not contain assistant content") from error
     if isinstance(content, Mapping) and "type" not in content:
         return dict(content)
+    if content is None:
+        usage = response.get("usage")
+        reasoning_tokens = 0
+        completion_tokens = 0
+        if isinstance(usage, Mapping):
+            completion_tokens = int(usage.get("completion_tokens") or 0)
+            details = usage.get("completion_tokens_details")
+            if isinstance(details, Mapping):
+                reasoning_tokens = int(details.get("reasoning_tokens") or 0)
+            reasoning_tokens = int(usage.get("reasoning_tokens") or reasoning_tokens)
+        if completion_tokens and reasoning_tokens >= completion_tokens:
+            raise OpenRouterError(
+                "OpenRouter returned no assistant content because reasoning exhausted the completion budget"
+            )
     content = _content_text(content)
     try:
         value = json.loads(content)

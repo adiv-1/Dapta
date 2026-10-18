@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 
 from dapta.ledger import UsageLedger
-from dapta.openrouter import OpenRouterClient, OpenRouterError, _response_json
+from dapta.openrouter import FactoryAgents, OpenRouterClient, OpenRouterError, _response_json
 
 
 class FakeTransport:
@@ -140,6 +140,29 @@ class OpenRouterTests(unittest.TestCase):
             "choices": [{"message": {"content": {"result": "ok"}}}],
         })
         self.assertEqual(result, {"result": "ok"})
+
+    def test_reasoning_budget_exhaustion_has_a_specific_error(self):
+        with self.assertRaisesRegex(OpenRouterError, "reasoning exhausted"):
+            _response_json({
+                "choices": [{"message": {"content": None}}],
+                "usage": {
+                    "completion_tokens": 12000,
+                    "completion_tokens_details": {"reasoning_tokens": 12000},
+                },
+            })
+
+    def test_data_builder_disables_reasoning_to_preserve_output_budget(self):
+        class Client:
+            def complete_json(inner_self, **kwargs):
+                return kwargs
+
+        agents = FactoryAgents(Client(), factory_model="moonshotai/kimi-k3", critic_model="critic")
+        result = agents.build_dataset(
+            run_id="job-1",
+            workflow="clean CSV",
+            skill_contract={"output_schema": {}},
+        )
+        self.assertEqual(result["reasoning_effort"], "none")
 
 
 if __name__ == "__main__":
