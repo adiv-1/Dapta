@@ -66,6 +66,20 @@ export type Job = {
   publish_result?: {
     artifact_uri: string;
     adapter: Adapter;
+    benchmark_status?: string;
+    suggested_repairs?: string[];
+  };
+  training?: Record<string, unknown>;
+  usage?: {
+    total_cost_usd?: string;
+    model_cost_usd?: string;
+    compute_cost_usd?: string;
+    conditions?: Array<{
+      condition: string;
+      cost_usd?: string;
+      duration_ms?: number;
+      request_count?: number;
+    }>;
   };
   devin_session?: {
     session_id: string;
@@ -90,6 +104,7 @@ export type Job = {
     claimed_at: string;
     completed_at?: string;
   }>;
+  artifacts?: Array<{ name: string; sha256: string; created_at: string }>;
   agent_outputs?: AgentOutput[];
 };
 
@@ -126,6 +141,12 @@ export type FactoryProgress = {
 
 export type FactoryEvaluation = {
   passed?: boolean;
+  repairable?: boolean;
+  benchmark_status?: string;
+  evaluation_verified?: boolean;
+  failure_reason?: string;
+  suggested_repairs?: string[];
+  dev_feedback?: { instruction?: string };
   test_cases?: number;
   conditions?: Record<string, {
     field_f1?: number;

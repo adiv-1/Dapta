@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity, ArrowUp, BarChart3, BrainCircuit, Check, Clock3, Cpu,
   Database, FileText, Layers3, Loader2, PackageCheck, Plus, Router,
-  ShieldCheck, Sparkles, Upload, UploadCloud, X,
+  ShieldCheck, Sparkles, Upload, UploadCloud, Wrench, X,
 } from "lucide-react";
 import { api } from "./api";
 import type { Adapter, Benchmark, Condition, Job, Run } from "./types";
@@ -34,16 +34,25 @@ export default function App() {
   const fileInput = useRef<HTMLInputElement>(null);
 
   const refresh = async () => {
-    const [nextAdapters, nextBenchmarks, nextRuns, nextJobs] = await Promise.all([
+    const [adaptersResult, benchmarksResult, runsResult, jobsResult] = await Promise.allSettled([
       api.adapters(), api.benchmarks(), api.runs(), api.jobs(),
     ]);
-    setAdapters(nextAdapters);
-    setBenchmarks(nextBenchmarks);
-    setRuns(nextRuns);
-    setJobs(nextJobs);
-    setSelectedRun((current) => current || nextRuns[0]?.run_id);
-    setSelectedBenchmark((current) => current || nextBenchmarks[0]?.benchmark_id);
-    setSelectedJob((current) => current || nextJobs[0]?.job_id);
+    if (adaptersResult.status === "fulfilled") setAdapters(adaptersResult.value);
+    if (benchmarksResult.status === "fulfilled") {
+      setBenchmarks(benchmarksResult.value);
+      setSelectedBenchmark((current) => current || benchmarksResult.value[0]?.benchmark_id);
+    }
+    if (runsResult.status === "fulfilled") {
+      setRuns(runsResult.value);
+      setSelectedRun((current) => current || runsResult.value[0]?.run_id);
+    }
+    if (jobsResult.status === "fulfilled") {
+      setJobs(jobsResult.value);
+      setSelectedJob((current) => current || jobsResult.value[0]?.job_id);
+    }
+    const failure = [adaptersResult, benchmarksResult, runsResult, jobsResult]
+      .find((result) => result.status === "rejected");
+    if (failure?.status === "rejected") throw failure.reason;
   };
 
   useEffect(() => { refresh().catch((reason) => setError(reason.message)); }, []);
@@ -254,7 +263,10 @@ function Registry({ adapters, jobs, selectedJob, setSelectedJob, onTest, onRetry
       {job && <FactoryTimeline job={job} onRetry={onRetry} />}
       <div className="registry-heading"><div><h2>Adapter registry</h2><p>Ready specialists restored from Hugging Face.</p></div><button onClick={onTest}><Plus size={16} />New specialist</button></div>
       <div className="registry-grid">
-        {adapters.map((adapter) => <article className="adapter-card" key={adapter.adapter_id}><div className="adapter-icon"><FileText /></div><span className="ready"><span />Ready</span><h2>{String(adapter.metadata.name || adapter.skill_id)}</h2><p>{String(adapter.metadata.description || "Reusable LoRA adapter")}</p><dl><div><dt>Base model</dt><dd>{adapter.base_model.split("/").pop()}</dd></div><div><dt>Field F1</dt><dd>{(Number(adapter.metadata.benchmark_accuracy || 0) * 100).toFixed(1)}%</dd></div><div><dt>Version</dt><dd>{adapter.version}</dd></div></dl><button onClick={onTest}>Test adapter</button></article>)}
+        {adapters.map((adapter) => {
+          const needsRepair = adapter.metadata.benchmark_status === "needs_repair";
+          return <article className="adapter-card" key={adapter.adapter_id}><div className="adapter-icon"><FileText /></div><span className={needsRepair ? "building-pill" : "ready"}><span />{needsRepair ? "Benchmark repair" : "Ready"}</span><h2>{String(adapter.metadata.name || adapter.skill_id)}</h2><p>{String(adapter.metadata.description || "Reusable LoRA adapter")}</p><dl><div><dt>Base model</dt><dd>{adapter.base_model.split("/").pop()}</dd></div><div><dt>Benchmark</dt><dd>{needsRepair ? "Pending rerun" : `${(Number(adapter.metadata.benchmark_accuracy || 0) * 100).toFixed(1)}% F1`}</dd></div><div><dt>Version</dt><dd>{adapter.version}</dd></div><div><dt>Training cost</dt><dd>${Number(adapter.metadata.training_cost_usd || 0).toFixed(3)}</dd></div></dl><button onClick={onTest}>Test adapter</button></article>;
+        })}
         {!adapters.length && <button className="new-card" onClick={onTest}><Plus /><span>Create a new specialist</span></button>}
       </div>
     </section>
@@ -262,15 +274,29 @@ function Registry({ adapters, jobs, selectedJob, setSelectedJob, onTest, onRetry
 }
 
 function FactoryTimeline({ job, onRetry }: { job: Job; onRetry: (jobId: string) => Promise<void> }) {
+  const now = useLiveNow(!["ready", "failed"].includes(job.status));
   const backendOrder = ["queued", "architecting", "integrating", "building_dataset", "validating", "awaiting_compute", "provisioning_gpu", "training", "evaluating", "publishing", "ready"];
   const failedFrom = [...(job.events || [])].reverse().find((event) => event.to_status === "failed")?.from_status;
   const effectiveStatus = job.status === "failed" ? failedFrom || "queued" : job.status;
   const current = Math.max(0, backendOrder.indexOf(effectiveStatus));
   const progress = job.progress;
-  const overall = job.status === "ready" ? 100 : Math.max(4, current / (backendOrder.length - 1) * 100);
+  const published = Boolean(job.publish_result);
+  const overall = job.status === "ready" ? 100 : published ? 96 : Math.max(4, current / (backendOrder.length - 1) * 100);
+  const finishedAt = ["ready", "failed"].includes(job.status)
+    ? latestJobTimestamp(job) : new Date(now).toISOString();
+  const totalSeconds = secondsBetween(job.created_at, finishedAt);
+  const totalCost = Number(job.usage?.total_cost_usd || progress?.cost_usd || 0);
+  const eta = estimateJobEta(job);
+  const repairs = repairSuggestions(job);
   return (
     <article className={`factory-panel ${job.status}`}>
       <div className="factory-head"><div><span className="factory-state">{job.status === "ready" ? <Check size={14} /> : job.status === "failed" ? <X size={14} /> : <Loader2 className="spin" size={14} />}{stageLabel(job.status)}</span><h2>{job.skill_id || "New LoRA specialist"}</h2><p>{job.workflow}</p></div><div className="factory-percent"><strong>{Math.round(overall)}%</strong><span>Round {job.dataset_round || 1}</span></div></div>
+      <div className="factory-totals">
+        <div><small>End-to-end timer</small><strong>{formatDuration(totalSeconds)}</strong></div>
+        <div><small>Universal cost</small><strong>${totalCost.toFixed(4)}</strong></div>
+        <div><small>Estimated completion</small><strong>{eta == null ? (published ? "Published" : "Decision needed") : `~${formatDuration(eta)}`}</strong></div>
+        <div><small>Devin usage</small><strong>{Number(job.devin_session?.acus_consumed || job.devin_session?.on_demand_usage || 0).toFixed(2)} ACUs</strong></div>
+      </div>
       <div className="factory-progress"><span style={{ width: `${overall}%` }} /></div>
       <div className="factory-workspace">
         <div className="pipeline">
@@ -278,6 +304,9 @@ function FactoryTimeline({ job, onRetry }: { job: Job; onRetry: (jobId: string) 
           const stageBackendIndex = backendOrder.indexOf(stage.key);
           const completed = job.status === "ready"
             || (stage.key === "queued" && Boolean(job.route))
+            || (stage.key === "training" && Boolean(job.training))
+            || (stage.key === "evaluating" && Boolean(job.deterministic_evaluation))
+            || (stage.key === "publishing" && published)
             || current > stageBackendIndex;
           const active = !completed && (
             stage.key === job.status
@@ -291,15 +320,98 @@ function FactoryTimeline({ job, onRetry }: { job: Job; onRetry: (jobId: string) 
             const devinLabel = ["waiting_for_user", "inactivity"].includes(job.devin_session?.status_detail || "")
               ? "bundle complete · saving outside GitHub"
               : job.devin_session?.status;
-            return <div className={`pipeline-step ${completed ? "complete" : active ? "active" : failed ? "failed" : "pending"}`} key={stage.key}><div className="pipeline-icon">{completed ? <Check /> : failed ? <X /> : active ? <Loader2 className="spin" /> : <Icon />}</div><div><strong>{stage.label}</strong><span>{stage.detail}</span>{stage.key === "queued" && job.route && <small>{job.route.decision} · {Math.round(job.route.confidence * 100)}% · {job.route.reason}</small>}{stage.key === "integrating" && job.devin_session && <small>{devinLabel}{job.devin_session.pull_request_url ? " · PR ready" : ""}</small>}{stage.key === "validating" && job.validation && <small>Frozen TEST: {String(job.validation.frozen_test_sha256 || "pending").slice(0, 14)}…</small>}{stage.key === "training" && active && progress && <TrainingTelemetry progress={progress} />}{stage.key === "publishing" && job.publish_result && <a href={job.publish_result.artifact_uri.replace("hf://", "https://huggingface.co/")} target="_blank" rel="noreferrer">Open adapter ↗</a>}</div></div>;
+            const timing = stageTiming(job, stage.key, now);
+            const stageCost = costForStage(job, stage.key);
+            const result = stageResult(job, stage.key);
+            return <div className={`pipeline-step ${completed ? "complete" : active ? "active" : failed ? "failed" : "pending"}`} key={stage.key}><div className="pipeline-icon">{completed ? <Check /> : failed ? <X /> : active ? <Loader2 className="spin" /> : <Icon />}</div><div><strong>{stage.label}</strong><span>{stage.detail}</span><div className="stage-metrics"><span>{timing == null ? "Not started" : formatDuration(timing)}</span><span>${stageCost.toFixed(4)}</span>{active && eta != null && <span>ETA ~{formatDuration(eta)}</span>}</div>{result && <small className="stage-result">Result: {result}</small>}{stage.key === "queued" && job.route && <small>{job.route.decision} · {Math.round(Number(job.route.confidence || 0) * 100)}% · {job.route.reason}</small>}{stage.key === "integrating" && job.devin_session && <small>{devinLabel}{job.devin_session.pull_request_url ? " · PR ready" : ""}</small>}{stage.key === "validating" && job.validation && <small>Frozen TEST: {String(job.validation.frozen_test_sha256 || "pending").slice(0, 14)}…</small>}{stage.key === "training" && (active || completed) && progress && <TrainingTelemetry progress={progress} />}{stage.key === "publishing" && job.publish_result && <a href={job.publish_result.artifact_uri.replace("hf://", "https://huggingface.co/")} target="_blank" rel="noreferrer">Open adapter ↗</a>}</div></div>;
           })}
         </div>
         <AgentOutputPanel job={job} />
       </div>
-      {job.failure_message && <div className="factory-error"><div><strong>{job.failure_code}</strong><span>{job.failure_message}</span></div><button onClick={() => onRetry(job.job_id)}>Retry stage</button></div>}
+      {job.failure_message && <div className="factory-error repair-card"><Wrench size={18} /><div><strong>{job.failure_code}</strong><span>{job.failure_message}</span>{repairs.length > 0 && <ul>{repairs.map((repair) => <li key={repair}>{repair}</li>)}</ul>}</div><button onClick={() => onRetry(job.job_id)}>{job.failure_code === "EvaluationOutputTruncated" ? "Apply repair & rerun benchmark" : "Retry failed stage"}</button></div>}
       {job.deterministic_evaluation?.conditions && <FactoryResults evaluation={job.deterministic_evaluation} />}
     </article>
   );
+}
+
+const attemptStage: Record<string, string> = {
+  architecting: "skill_architect", integrating: "skill_integration",
+  building_dataset: "data_builder", validating: "dataset_validator",
+  training: "adapter_training", evaluating: "independent_evaluator",
+  publishing: "registry_publish",
+};
+
+function useLiveNow(active: boolean) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    if (!active) return;
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [active]);
+  return now;
+}
+
+function latestJobTimestamp(job: Job) {
+  const candidates = [job.updated_at, ...(job.artifacts || []).map((item) => item.created_at)];
+  return candidates.sort((a, b) => Date.parse(b) - Date.parse(a))[0] || job.updated_at;
+}
+
+function secondsBetween(start?: string, end?: string) {
+  if (!start || !end) return 0;
+  return Math.max(0, Math.floor((Date.parse(end) - Date.parse(start)) / 1000));
+}
+
+function formatDuration(seconds: number) {
+  if (!Number.isFinite(seconds)) return "—";
+  const value = Math.max(0, Math.round(seconds));
+  const hours = Math.floor(value / 3600);
+  const minutes = Math.floor((value % 3600) / 60);
+  const rest = value % 60;
+  return hours ? `${hours}h ${minutes}m` : minutes ? `${minutes}m ${rest}s` : `${rest}s`;
+}
+
+function stageTiming(job: Job, key: string, now: number) {
+  if (key === "queued" && job.route) return secondsBetween(job.created_at, job.events?.find((event) => event.to_status === "architecting")?.occurred_at || job.updated_at);
+  const attempt = [...(job.stage_attempts || [])].reverse().find((item) => item.stage === attemptStage[key]);
+  return attempt ? secondsBetween(attempt.claimed_at, attempt.completed_at || new Date(now).toISOString()) : null;
+}
+
+function costForStage(job: Job, key: string) {
+  if (key === "training") return Number(job.progress?.cost_usd || job.training?.training_cost_usd || job.usage?.compute_cost_usd || 0);
+  const names: Record<string, string[]> = {
+    architecting: ["skill_architect"], building_dataset: ["data_builder"],
+    evaluating: ["independent_evaluator", "base_no_skill", "base_with_skill", "lora_short_prompt"],
+  };
+  return (job.usage?.conditions || [])
+    .filter((item) => (names[key] || []).includes(item.condition))
+    .reduce((sum, item) => sum + Number(item.cost_usd || 0), 0);
+}
+
+function stageResult(job: Job, key: string) {
+  const output = [...(job.agent_outputs || [])].reverse().find((item) => item.stage === key || item.stage === attemptStage[key]);
+  if (output) return output.summary;
+  if (key === "training" && job.training) return "LoRA weights trained; four held-out generations completed";
+  if (key === "evaluating" && job.deterministic_evaluation) return job.deterministic_evaluation.passed ? "Frozen benchmark passed" : "Benchmark needs repair";
+  if (key === "publishing" && job.publish_result) return "Weights and skill bundle saved to Hugging Face";
+  return undefined;
+}
+
+function repairSuggestions(job: Job) {
+  const evaluation = job.deterministic_evaluation;
+  if (evaluation?.suggested_repairs?.length) return evaluation.suggested_repairs;
+  if (evaluation?.dev_feedback?.instruction) return [evaluation.dev_feedback.instruction];
+  return [];
+}
+
+function estimateJobEta(job: Job) {
+  if (["ready", "failed"].includes(job.status)) return null;
+  if (job.progress?.eta_seconds != null) return job.progress.eta_seconds;
+  const estimates: Record<string, number> = {
+    queued: 1500, architecting: 1440, integrating: 1200, building_dataset: 900,
+    validating: 720, awaiting_compute: 660, provisioning_gpu: 600, training: 540,
+    evaluating: 240, publishing: 60,
+  };
+  return estimates[job.status] ?? 600;
 }
 
 function AgentOutputPanel({ job }: { job: Job }) {

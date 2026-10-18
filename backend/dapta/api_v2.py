@@ -277,11 +277,11 @@ def create_app(database_path: Path | str | None = None) -> FastAPI:
 
     @app.get("/v1/jobs", dependencies=protected)
     def list_v1_jobs(limit: int = 100) -> list[dict[str, Any]]:
-        return store.list_jobs(limit=limit)
+        return [_job_with_usage(job, ledger) for job in store.list_jobs(limit=limit)]
 
     @app.get("/v1/jobs/{job_id}", dependencies=protected)
     def get_v1_job(job_id: str) -> dict[str, Any]:
-        return _get_job(store, job_id)
+        return _job_with_usage(_get_job(store, job_id), ledger)
 
     @app.get("/v1/jobs/{job_id}/events", dependencies=protected)
     def stream_job(job_id: str) -> StreamingResponse:
@@ -401,6 +401,21 @@ def _add_compatibility_routes(
     @app.post("/compare")
     def legacy_compare() -> None:
         raise HTTPException(status_code=501, detail="use POST /v1/comparisons")
+
+
+def _job_with_usage(job: dict[str, Any], ledger: UsageLedger) -> dict[str, Any]:
+    """Attach the durable cost ledger without making job polling brittle."""
+    result = dict(job)
+    try:
+        result["usage"] = ledger.run_summary(str(job["job_id"]))
+    except ValueError:
+        result["usage"] = {
+            "total_cost_usd": "0",
+            "model_cost_usd": "0",
+            "compute_cost_usd": "0",
+            "conditions": [],
+        }
+    return result
 
 
 def _create_job(
