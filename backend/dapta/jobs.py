@@ -364,7 +364,66 @@ class JobStore:
                 if enter_status:
                     _apply_transition(connection, job_id, enter_status, now, _json({"round": round}))
         except sqlite3.IntegrityError as error:
-            raise JobConflict(f"stage was already claimed: {stage} round {round}") from error
+            with self._connect(immediate=True) as connection:
+                attempt = connection.execute(
+                    """
+                    SELECT status FROM job_stage_attempts
+                    WHERE job_id=? AND stage=? AND round=?
+                    """,
+                    (job_id, stage, _round(round)),
+                ).fetchone()
+                if attempt is None or attempt["status"] != "interrupted":
+                    raise JobConflict(
+                        f"stage was already claimed: {stage} round {round}"
+                    ) from error
+                connection.execute(
+                    """
+                    UPDATE job_stage_attempts
+                    SET status='running', claimed_at=?, completed_at=NULL
+                    WHERE job_id=? AND stage=? AND round=? AND status='interrupted'
+                    """,
+                    (now, job_id, stage, _round(round)),
+                )
+                if enter_status:
+                    _apply_transition(
+                        connection, job_id, enter_status, now, _json({"round": round})
+                    )
+
+    def recover_interrupted_stages(self) -> int:
+        """Release stage claims abandoned when the single controller was replaced."""
+        now = _timestamp()
+        with self._connect(immediate=True) as connection:
+            rows = connection.execute(
+                """
+                SELECT a.job_id, a.stage, a.round, j.status
+                FROM job_stage_attempts a
+                JOIN jobs j ON j.job_id = a.job_id
+                WHERE a.status='running' AND j.status NOT IN ('ready', 'failed')
+                """
+            ).fetchall()
+            for row in rows:
+                connection.execute(
+                    """
+                    UPDATE job_stage_attempts SET status='interrupted', completed_at=?
+                    WHERE job_id=? AND stage=? AND round=? AND status='running'
+                    """,
+                    (now, row["job_id"], row["stage"], row["round"]),
+                )
+                connection.execute(
+                    """
+                    INSERT INTO job_events(
+                        event_id, job_id, from_status, to_status, occurred_at, metadata_json
+                    ) VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        str(uuid.uuid4()), row["job_id"], row["status"], row["status"], now,
+                        _json({
+                            "stage": row["stage"], "round": row["round"],
+                            "recovered_after_controller_restart": True,
+                        }),
+                    ),
+                )
+        return len(rows)
 
     def complete_stage(
         self, job_id: str, stage: str, *, status: str, round: int = 1,

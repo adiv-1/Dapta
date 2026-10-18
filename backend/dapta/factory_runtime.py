@@ -454,6 +454,7 @@ class FactoryRunner:
     def start(self) -> None:
         if self.thread and self.thread.is_alive():
             return
+        self.store.recover_interrupted_stages()
         for job in self.store.list_jobs():
             self._mirror(job)
         self.thread = threading.Thread(target=self._loop, name="dapta-factory", daemon=True)

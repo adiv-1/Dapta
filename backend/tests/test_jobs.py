@@ -200,6 +200,30 @@ class JobTests(unittest.TestCase):
         with self.assertRaisesRegex(JobConflict, "already claimed"):
             self.store.claim_stage(job["job_id"], "skill_architect")
 
+    def test_abandoned_stage_is_recorded_and_can_resume(self):
+        job = self.store.create_job(
+            workflow="Build a stable repeated reporting specialist.",
+            idempotency_key="resume-stage-001",
+        )
+        self.store.claim_stage(
+            job["job_id"], "skill_architect", enter_status="architecting"
+        )
+
+        self.assertEqual(self.store.recover_interrupted_stages(), 1)
+        recovered = self.store.get_job(job["job_id"])
+        self.assertTrue(
+            recovered["events"][-1]["metadata"]["recovered_after_controller_restart"]
+        )
+
+        self.store.claim_stage(
+            job["job_id"], "skill_architect", enter_status="architecting"
+        )
+        self.store.complete_stage(
+            job["job_id"], "skill_architect", status="completed",
+            next_status="integrating",
+        )
+        self.assertEqual(self.store.get_job(job["job_id"])["status"], "integrating")
+
     def test_adapter_registry_is_versioned(self):
         adapter = self.store.register_adapter(
             adapter_id="expense-report-v1",
