@@ -151,7 +151,7 @@ class OpenRouterTests(unittest.TestCase):
                 },
             })
 
-    def test_data_builder_disables_reasoning_to_preserve_output_budget(self):
+    def test_data_builder_has_no_application_token_or_reasoning_cap(self):
         class Client:
             def complete_json(inner_self, **kwargs):
                 return kwargs
@@ -162,7 +162,33 @@ class OpenRouterTests(unittest.TestCase):
             workflow="clean CSV",
             skill_contract={"output_schema": {}},
         )
-        self.assertEqual(result["reasoning_effort"], "none")
+        self.assertIsNone(result["reasoning_effort"])
+        self.assertIsNone(result["max_tokens"])
+
+    def test_none_max_tokens_is_omitted_from_request(self):
+        transport = FakeTransport([
+            {
+                "id": None,
+                "choices": [{"message": {"content": '{"result":"ok"}'}}],
+                "usage": {"prompt_tokens": 1, "completion_tokens": 1},
+            },
+        ])
+        client = OpenRouterClient(
+            api_key="test-key",
+            ledger=self.ledger,
+            transport=transport,
+            sleep=lambda _: None,
+        )
+        client.complete_json(
+            run_id="job-1",
+            stage="data_builder",
+            agent_role="data_builder",
+            model="moonshotai/kimi-k3",
+            messages=[{"role": "user", "content": "build"}],
+            max_tokens=None,
+            reasoning_effort="none",
+        )
+        self.assertNotIn("max_tokens", transport.calls[0]["payload"])
 
 
 if __name__ == "__main__":

@@ -86,7 +86,7 @@ class OpenRouterClient:
         agent_role: str,
         model: str,
         messages: list[dict[str, Any]],
-        max_tokens: int,
+        max_tokens: int | None,
         temperature: float = 0,
         benchmark_case_id: str | None = None,
         condition: str | None = None,
@@ -101,7 +101,6 @@ class OpenRouterClient:
                 "model": model,
                 "messages": messages,
                 "temperature": temperature,
-                "max_tokens": max_tokens,
                 "response_format": {"type": "json_object"},
                 "usage": {"include": True},
                 "user": run_id,
@@ -112,6 +111,8 @@ class OpenRouterClient:
                     "generation_name": agent_role,
                 },
             }
+            if max_tokens is not None:
+                payload["max_tokens"] = max_tokens
             if reasoning_effort:
                 payload["reasoning"] = {"effort": reasoning_effort}
             response = self.transport.request(
@@ -192,7 +193,7 @@ class AgentDefinition:
     name: str
     model: str
     stage: str
-    max_tokens: int
+    max_tokens: int | None
     system_prompt: str
 
 
@@ -224,7 +225,7 @@ class FactoryAgents:
             name="data_builder",
             model=factory_model,
             stage="data_builder",
-            max_tokens=12000,
+            max_tokens=None,
             system_prompt=(
                 "You are Dapta's Data Builder. Follow the approved skill contract exactly. "
                 "Return four top-level arrays: train, dev, test, and ood. Every item must be "
@@ -299,9 +300,7 @@ class FactoryAgents:
     ) -> dict[str, Any]:
         reasoning_effort = None
         if definition.name == "data_builder":
-            reasoning_effort = os.environ.get(
-                "OPENROUTER_DATA_BUILDER_REASONING_EFFORT", "none"
-            )
+            reasoning_effort = os.environ.get("OPENROUTER_DATA_BUILDER_REASONING_EFFORT")
         return self.client.complete_json(
             run_id=run_id,
             stage=definition.stage,
