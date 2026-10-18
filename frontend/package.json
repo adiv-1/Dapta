@@ -7,14 +7,17 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "test": "node --test --import ./tests/register.mjs tests/tracing.test.ts tests/proxy.test.ts tests/sdk-propagation.test.ts tests/polling.test.ts tests/factory-render.test.ts tests/conversation.test.ts"
+    "test": "node --test --import ./tests/register.mjs tests/tracing.test.ts tests/proxy.test.ts tests/sdk-propagation.test.ts tests/polling.test.ts tests/factory-render.test.ts tests/conversation.test.ts tests/output-render.test.ts tests/chart-runtime.test.ts"
   },
   "dependencies": {
     "@base44/sdk": "^0.8.40",
     "@sentry/react": "^10.22.0",
     "lucide-react": "^0.468.0",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "vega": "^6.4.0",
+    "vega-interpreter": "^2.3.2",
+    "vega-lite": "^6.5.0"
   },
   "devDependencies": {
     "@base44/vite-plugin": "^1.0.30",

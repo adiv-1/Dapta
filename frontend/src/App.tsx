@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { api } from "./api";
 import { Conversation, AdapterDrawer } from "./Conversation";
+import { ModelOutput } from "./ModelOutput";
 import { PollCoordinator, type PollTelemetry } from "./polling";
 import type { Adapter, Benchmark, Condition, Job, Run } from "./types";
 
@@ -162,7 +163,7 @@ export function ModelGrid({ run, running }: { run?: Run; running: boolean }) {
       })}</tr></tbody></table></div>
     <details className="comparison-outputs" open><summary><span>Model responses</span><ChevronDown size={16} /></summary><div className="response-grid">{names.map((name) => {
       const condition = run?.results[name];
-      return <article key={name} className="response-panel" aria-label={(condition?.label || labels[name]) + " response"}><span className="response-label">{condition?.label || labels[name]}</span>{condition?.status === "failed" ? <p role="alert" className="reply-error">{condition.error || "This model could not complete the request."}</p> : condition?.status === "completed" ? <pre>{JSON.stringify(condition.output, null, 2)}</pre> : <div className="response-wait"><Loader2 className={running ? "spin" : ""} size={18} /><span>{running ? "Waiting for the model’s response…" : "No response available."}</span></div>}</article>;
+      return <article key={name} className="response-panel" aria-label={(condition?.label || labels[name]) + " response"}><span className="response-label">{condition?.label || labels[name]}</span>{condition?.status === "failed" ? <p role="alert" className="reply-error">{condition.error || "This model could not complete the request."}</p> : condition?.status === "completed" ? <ModelOutput key={run?.run_id} output={condition.output} modelLabel={condition.label || labels[name]} /> : <div className="response-wait"><Loader2 className={running ? "spin" : ""} size={18} /><span>{running ? "Waiting for the model’s response…" : "No response available."}</span></div>}</article>;
     })}</div></details>
     <details className="comparison-method"><summary>How this comparison is measured</summary><p>All models receive the same task and input. The LoRA specialist uses its compact skill prompt; frontier models receive the full skill. Time and usage come from completed calls. Cost is the recorded request cost; unavailable costs stay blank. Quality is a per-document evaluation, not a held-out benchmark. Provider tokenizers differ.</p><div>{names.map((name) => <span key={name}>{run?.results[name]?.model || labels[name]}{run?.results[name]?.metrics.accuracy_label ? " · " + run.results[name].metrics.accuracy_label : ""}</span>)}</div></details>
   </section>;

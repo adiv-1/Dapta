@@ -108,6 +108,18 @@ stay blank and metric winners appear only after all three calls complete.
 Playfair Display is reserved for the brand; Inter is used throughout the
 working interface with tabular numerals for metrics.
 
+Model responses share the same **Preview / JSON** renderer across LoRA, Claude,
+and GPT. Self-contained Vega-Lite `dashboard_spec` outputs render as charts;
+`cleaned_rows` / `cleaned_csv` and object arrays become paginated tables. Receipt
+and expense outputs show reported totals, currencies, extracted fields, and line
+items; support routing displays queue, priority, and response-code badges.
+Every result can be expanded, copied, or downloaded as its original JSON, with
+CSV table and SVG chart exports. Missing values remain missing; the preview is
+not a quality score. Generated Python/HTML is source-only and never executed.
+Chart rendering runs in a bounded worker using interpreted expressions and
+inline data only; invalid or blocked specs leave the response available in JSON.
+This is presentation support, not a change to training or receipt-image ingestion.
+
 The Performance tab uses unambiguous **Comparison runs** and **Training
 benchmarks** views. Equal accuracy is reported as `Equal` instead of awarding a
 false winner. Completed comparisons are listed newest-first with the speed,
