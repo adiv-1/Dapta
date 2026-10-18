@@ -807,6 +807,10 @@ class AdapterJobOrchestrator:
             )
             if report["passed"]:
                 return "publishing"
+            if report.get("repairable") is False:
+                raise ValueError(
+                    str(report.get("failure_reason") or "evaluation configuration failed")
+                )
             if round < self._round_limit():
                 return "building_dataset"
             raise ValueError(f"adapter failed evaluation after {round} data rounds")

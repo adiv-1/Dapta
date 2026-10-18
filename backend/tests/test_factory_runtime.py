@@ -75,7 +75,32 @@ class FactoryRuntimeTests(unittest.TestCase):
             },
         )
         self.assertTrue(result["passed"])
+        self.assertTrue(result["repairable"])
         self.assertEqual(result["thresholds"]["minimum_lift"], 0.02)
+
+    def test_saved_evaluation_marks_truncation_as_configuration_failure(self):
+        evaluator = SavedEvaluation()
+        result = evaluator.evaluate(
+            job={},
+            round=1,
+            training={
+                "evaluation": {
+                    "conditions": {
+                        "base_with_skill": {"field_f1": 0.0},
+                        "lora_short_prompt": {
+                            "field_f1": 0.0,
+                            "schema_pass_rate": 0.0,
+                            "truncated_cases": ["test-1"],
+                        },
+                    }
+                }
+            },
+        )
+
+        self.assertFalse(result["passed"])
+        self.assertFalse(result["repairable"])
+        self.assertEqual(result["failure_reason"], "evaluation_output_truncated")
+        self.assertIn("do not generate repair data", result["dev_feedback"]["instruction"])
 
 
 if __name__ == "__main__":

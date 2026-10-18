@@ -399,16 +399,30 @@ class SavedEvaluation:
         schema = float(conditions.get("lora_short_prompt", {}).get("schema_pass_rate", 0))
         minimum_lift = float(os.environ.get("DAPTA_MIN_LORA_LIFT", "0.02"))
         minimum_schema = float(os.environ.get("DAPTA_MIN_SCHEMA_PASS_RATE", "0.8"))
+        truncated = {
+            name: list(value.get("truncated_cases") or [])
+            for name, value in conditions.items()
+            if isinstance(value, Mapping) and value.get("truncated_cases")
+        }
         report["passed"] = lora >= base_skill + minimum_lift and schema >= minimum_schema
+        report["repairable"] = not bool(truncated)
         report["thresholds"] = {
             "minimum_lift": minimum_lift,
             "minimum_schema_pass_rate": minimum_schema,
         }
+        if truncated:
+            report["failure_reason"] = "evaluation_output_truncated"
+            report["truncated_cases"] = truncated
         if not report["passed"]:
             report["dev_feedback"] = {
                 "observed_lift": lora - base_skill,
                 "schema_pass_rate": schema,
-                "instruction": "Add targeted valid examples for failing DEV fields; do not inspect TEST.",
+                "instruction": (
+                    "Increase the evaluator output budget and rerun the frozen benchmark; "
+                    "do not generate repair data."
+                    if truncated
+                    else "Add targeted valid examples for failing DEV fields; do not inspect TEST."
+                ),
             }
         return report
 

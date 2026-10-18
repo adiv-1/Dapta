@@ -261,6 +261,8 @@ def evaluate_condition(
     elapsed: list[float] = []
     input_tokens = 0
     output_tokens = 0
+    truncated_cases: list[str] = []
+    max_new_tokens = int(os.environ.get("DAPTA_FACTORY_MAX_NEW_TOKENS", "4096"))
     for index, case in enumerate(cases):
         messages = [
             {"role": "system", "content": system_prompt},
@@ -277,7 +279,7 @@ def evaluate_condition(
         ):
             ids = model.generate(
                 **inputs,
-                max_new_tokens=int(os.environ.get("DAPTA_FACTORY_MAX_NEW_TOKENS", "768")),
+                max_new_tokens=max_new_tokens,
                 do_sample=False,
             )
         elapsed.append(time.perf_counter() - started)
@@ -288,6 +290,8 @@ def evaluate_condition(
         predictions.append(_parse_json(output))
         input_tokens += int(inputs.input_ids.shape[1])
         output_tokens += int(generated.shape[1])
+        if int(generated.shape[1]) >= max_new_tokens:
+            truncated_cases.append(str(case.get("id") or index))
         progress(
             stage="evaluation",
             message=f"{condition}: {index + 1}/{len(cases)}",
@@ -300,7 +304,10 @@ def evaluate_condition(
             ),
             gpu_utilization_percent=_gpu_utilization(),
         )
-    return score(cases, predictions, schema, elapsed, input_tokens, output_tokens)
+    result = score(cases, predictions, schema, elapsed, input_tokens, output_tokens)
+    result["generation_max_new_tokens"] = max_new_tokens
+    result["truncated_cases"] = truncated_cases
+    return result
 
 
 def score(
