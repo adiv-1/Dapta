@@ -42,8 +42,14 @@ class ComparisonScoringTests(unittest.TestCase):
             "parties": ["Acme_Inc.", "Beta_LLC"],
             "term": "3_years",
         }}}
-        self.service._score_results("NDA", results, self.metadata)
+        document = (
+            "Effective March 7, 2025 between Acme Inc. and Beta LLC. "
+            "Governed by New York law for three (3) years."
+        )
+        self.service._score_results(document, results, self.metadata)
         self.assertTrue(results["model"]["metrics"]["schema_valid"])
+        self.assertEqual(results["model"]["metrics"]["grounding"], 1.0)
+        self.assertEqual(results["model"]["metrics"]["accuracy"], 100.0)
 
     def test_wrapped_or_extra_key_output_is_not_schema_valid(self):
         for output in (
