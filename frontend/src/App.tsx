@@ -20,6 +20,55 @@ const labels: Record<string, string> = {
   frontier_b: "GPT",
 };
 
+// Temporary demo-only projections. These are deliberately kept out of the benchmark
+// ledger and labelled in the UI so they cannot be confused with measured evidence.
+const illustrativeBenchmarks: Benchmark[] = [
+  {
+    benchmark_id: "demo-support-router-v1",
+    name: "Support Code Router — demo projection",
+    created_at: "2026-10-18T00:00:00Z",
+    view: "adapter_lift",
+    test_documents: 120,
+    test_sha256: "illustrative-demo-data-not-a-frozen-test",
+    evidence_status: "illustrative",
+    evidence_note: "Illustrative demo projection—not produced by a completed benchmark run.",
+    conditions: {
+      base_no_skill: { label: "Qwen Base", accuracy: 68.3, latency_seconds: 1.46, cost_usd: 0.00018 },
+      base_with_skill: { label: "Qwen + Skill", accuracy: 89.2, latency_seconds: 1.28, cost_usd: 0.00016 },
+      lora_short_prompt: { label: "Qwen LoRA", accuracy: 96.7, latency_seconds: 0.74, cost_usd: 0.00009 },
+    },
+  },
+  {
+    benchmark_id: "demo-csv-cleaner-v1",
+    name: "CSV Cleaner & Dashboard — demo projection",
+    created_at: "2026-10-18T00:00:00Z",
+    view: "adapter_lift",
+    test_documents: 60,
+    test_sha256: "illustrative-demo-data-not-a-frozen-test",
+    evidence_status: "illustrative",
+    evidence_note: "Illustrative demo projection—not produced by a completed benchmark run.",
+    conditions: {
+      base_no_skill: { label: "Qwen Base", accuracy: 52.8, latency_seconds: 2.84, cost_usd: 0.00035 },
+      base_with_skill: { label: "Qwen + Skill", accuracy: 83.6, latency_seconds: 2.63, cost_usd: 0.00032 },
+      lora_short_prompt: { label: "Qwen LoRA", accuracy: 94.4, latency_seconds: 1.31, cost_usd: 0.00016 },
+    },
+  },
+];
+
+function withDemoEvidence(measured: Benchmark[]): Benchmark[] {
+  const enriched = measured.map((benchmark) => benchmark.benchmark_id === "nda-kleister-v1" ? {
+    ...benchmark,
+    evidence_status: "mixed" as const,
+    evidence_note: "Accuracy and speed are measured. Cost is an illustrative GPU-time estimate for today’s demo.",
+    conditions: Object.fromEntries(Object.entries(benchmark.conditions).map(([key, value]) => [key, {
+      ...value,
+      cost_usd: Number(value.cost_usd || Number(value.latency_seconds || 0) * 0.44 / 3600),
+    }])),
+  } : benchmark);
+  const ids = new Set(enriched.map((benchmark) => benchmark.benchmark_id));
+  return [...enriched, ...illustrativeBenchmarks.filter((benchmark) => !ids.has(benchmark.benchmark_id))];
+}
+
 function recordPoll(event: PollTelemetry) {
   Sentry.addBreadcrumb({
     category: "dapta.poll",
@@ -58,8 +107,9 @@ export default function App() {
     const [adapterResult, benchmarkResult, runResult, jobResult] = results;
     if (adapterResult.status === "fulfilled") setAdapters(adapterResult.value);
     if (benchmarkResult.status === "fulfilled") {
-      setBenchmarks(benchmarkResult.value);
-      setSelectedBenchmark((current) => current || benchmarkResult.value[0]?.benchmark_id);
+      const evidence = withDemoEvidence(benchmarkResult.value);
+      setBenchmarks(evidence);
+      setSelectedBenchmark((current) => current || evidence[0]?.benchmark_id);
     }
     if (runResult.status === "fulfilled") {
       setRuns(runResult.value);
@@ -186,10 +236,11 @@ function Performance(props: {
       <div className="page-title"><span><Activity size={18} /> Saved evidence</span><h1>Every run tells a story.</h1><p>Review the seconds, tokens, dollars, and quality behind your work.</p></div>
       <div className="segmented"><button className={props.view === "live" ? "active" : ""} onClick={() => props.setView("live")}>Comparison runs</button><button className={props.view === "lift" ? "active" : ""} onClick={() => props.setView("lift")}>Training benchmarks</button></div>
       <div className="run-pills">
-        {props.view === "lift" && props.benchmarks.map((item) => <button className={props.selectedBenchmark === item.benchmark_id ? "active" : ""} onClick={() => props.setSelectedBenchmark(item.benchmark_id)} key={item.benchmark_id}>{item.name}<small>{item.test_documents} frozen cases</small></button>)}
+        {props.view === "lift" && props.benchmarks.map((item) => <button className={props.selectedBenchmark === item.benchmark_id ? "active" : ""} onClick={() => props.setSelectedBenchmark(item.benchmark_id)} key={item.benchmark_id}>{item.name}<small>{item.evidence_status === "illustrative" ? `${item.test_documents} illustrative cases` : `${item.test_documents} frozen cases`}</small></button>)}
       </div>
+      {props.view === "lift" && props.benchmark?.evidence_status && <div className={`evidence-disclosure ${props.benchmark.evidence_status}`} role="note"><strong>{props.benchmark.evidence_status === "illustrative" ? "Illustrative demo data" : "Measured benchmark + estimated cost"}</strong><span>{props.benchmark.evidence_note}</span></div>}
       {props.view === "live" ? props.run ? <ModelGrid run={props.run} running={["queued", "running"].includes(props.run.status)} /> : <EmptyState text="Your completed comparisons will appear here." /> : conditions.length ? <><Summary conditions={conditions} /><div className="chart-grid"><MetricChart title="Speed" suffix="s" lower conditions={conditions} field="time" /><MetricChart title="Cost" suffix="$" lower conditions={conditions} field="cost" /><MetricChart title="Accuracy" suffix="%" conditions={conditions} field="accuracy" /></div></> : <EmptyState text="No training benchmarks yet." />}
-      {props.view === "lift" && props.benchmark && <p className="fine-print">Frozen test SHA-256: <code>{props.benchmark.test_sha256}</code>. Accuracy is labeled field F1; schema validity and exact-form rate remain available in the saved benchmark.</p>}
+      {props.view === "lift" && props.benchmark?.evidence_status !== "illustrative" && props.benchmark && <p className="fine-print">Frozen test SHA-256: <code>{props.benchmark.test_sha256}</code>. Accuracy is labeled field F1; schema validity and exact-form rate remain available in the saved benchmark.</p>}
       {props.view === "live" && <RunHistoryTable runs={props.runs} selectedRun={props.selectedRun} setSelectedRun={props.setSelectedRun} />}
     </section>
   );

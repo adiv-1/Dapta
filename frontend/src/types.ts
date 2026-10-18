@@ -47,6 +47,8 @@ export type Benchmark = {
   test_documents: number;
   test_sha256: string;
   conditions: Record<string, Record<string, number | string>>;
+  evidence_status?: "measured" | "illustrative" | "mixed";
+  evidence_note?: string;
 };
 
 export type Job = {
