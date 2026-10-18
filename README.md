@@ -9,6 +9,10 @@ Dapta turns stable, repetitive workflows into measured LoRA specialists for
 models on output quality, time, tokens, and cost, and preserves the evidence for
 the demo instead of making another model call to summarize it.
 
+The default live comparison now uses `anthropic/claude-opus-5.5` and
+`openai/gpt-5.6-sol` through OpenRouter. Override either provider ID with
+`OPENROUTER_FRONTIER_MODEL_A` or `OPENROUTER_FRONTIER_MODEL_B`.
+
 ## Current state
 
 Implemented and tested:
@@ -29,9 +33,13 @@ Implemented and tested:
 - private Supabase mirroring for factory stages and agent artifacts; uploaded
   judge documents, credentials, and internal reasoning are never mirrored.
 - RunPod controller/model worker with dynamic Hugging Face LoRA loading.
-- private Base44 React app with Chat, Performance, and Skills & Adapters tabs.
+- private Base44 React app with a light Dapta brand, visible three-model work
+  states, speed/cost/accuracy evidence, chronological comparison history, and
+  a model-labeled Skills & Adapters pipeline.
 - Base44 authentication boundary, secret proxy, and durable run/job snapshots.
-- Sentry backend traces/logs plus masked React Session Replay configuration.
+- Sentry backend traces/logs plus masked React Session Replay configuration and
+  an explicit factory feedback panel that separates operational repair,
+  benchmark repair, and genuine retraining decisions.
 - NDA seed adapter and the frozen 83-document benchmark produced on Colab.
 
 The NDA adapter is stored at
@@ -79,6 +87,28 @@ queued -> architecting -> integrating -> building_dataset -> validating
 `awaiting_compute` is a real budget gate. The autonomous runner advances after
 the cost cap and connected GPU checks pass; it never records training before
 the worker starts.
+
+## Product experience
+
+The Chat tab keeps the workflow and document composer visible and immediately
+shows all three model cards while work is in progress. Each card advances from
+adapter routing through reading, generation, and validation before showing the
+saved output and its latency, input/output tokens, and dollar cost.
+
+The Performance tab uses unambiguous **Comparison runs** and **Training
+benchmarks** views. Equal accuracy is reported as `Equal` instead of awarding a
+false winner. Completed comparisons are listed newest-first with the speed,
+cost, accuracy, and overall winner for each run.
+
+The Skills & Adapters tab names each factory step separately from the model or
+service powering it. Sentry status travels with the pipeline, while the
+retraining panel applies this decision order:
+
+1. Repair infrastructure or an incomplete evaluation before judging quality.
+2. Rerun a truncated benchmark without retraining existing weights.
+3. Publish immediately when the frozen benchmark passes.
+4. Apply DEV-only evaluator feedback and retrain only when verified quality
+   misses the frozen acceptance threshold.
 
 ## API
 
@@ -169,6 +199,9 @@ records but never stores API keys or uploads user documents to Hugging Face.
 ## Environment ownership
 
 - `.env` is ignored and is the only local location for provider credentials.
+- Sentry auth/user tokens are server-side secrets. Never expose one through a
+  `VITE_` variable; the browser only needs `VITE_SENTRY_DSN`, release, and
+  sampling configuration.
 - Base44 receives only the controller URL/token and its Sentry browser DSN.
 - RunPod receives OpenRouter, JEV, Devin, Hugging Face, Supabase, Qwen, and Sentry
   server credentials.
@@ -176,6 +209,10 @@ records but never stores API keys or uploads user documents to Hugging Face.
   uploads, provider secrets, or chain-of-thought.
 - Hugging Face receives adapter weights, manifests, `SKILL.md`, and benchmark
   artifacts—not private judge documents.
+
+Local IDE context, virtual environments, pytest caches, generated `artifacts/`,
+and notebook files are ignored by Git. The two local LoRA notebooks remain
+available for experimentation but are not part of the deployable repository.
 
 Further project rationale and dataset research are in `docs/`.
 

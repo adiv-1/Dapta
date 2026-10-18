@@ -59,3 +59,16 @@ test("switching to a job with fewer agent outputs keeps the live view up", async
     view.unmount();
   }
 });
+
+test("factory shows model ownership and a Sentry-informed retraining decision", async () => {
+  const view = mount();
+  try {
+    const finished = stages[stages.length - 1];
+    await view.render([finished], finished.job_id);
+    assert.ok(view.text().includes("Skill architectKimi K3"));
+    assert.ok(view.text().includes("Sentry feedback → retraining decision"));
+    assert.ok(view.text().includes("No retraining needed"));
+  } finally {
+    view.unmount();
+  }
+});
