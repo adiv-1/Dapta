@@ -70,13 +70,7 @@ class SupabaseFactoryStore:
         )
         _require_success(response, "resolve project secret")
         keys = response.json()
-        selected = next(
-            (
-                item for item in keys
-                if item.get("type") == "secret" or item.get("name") == "service_role"
-            ),
-            None,
-        )
+        selected = _server_key(keys)
         secret = str((selected or {}).get("api_key") or "")
         if not secret:
             raise SupabaseStoreError("the Supabase project has no server secret key")
@@ -133,14 +127,17 @@ class SupabaseFactoryStore:
             self._upsert("dapta_factory_artifacts", "job_id,name", artifacts)
 
     def _upsert(self, table: str, conflict: str, rows: list[dict[str, Any]]) -> None:
+        headers = {
+            "apikey": self.secret_key,
+            "Content-Type": "application/json",
+            "Prefer": "resolution=merge-duplicates,return=minimal",
+        }
+        if self.secret_key.startswith("eyJ"):
+            headers["Authorization"] = f"Bearer {self.secret_key}"
         response = self.client.post(
             f"{self.url}/rest/v1/{table}",
             params={"on_conflict": conflict},
-            headers={
-                "apikey": self.secret_key,
-                "Content-Type": "application/json",
-                "Prefer": "resolution=merge-duplicates,return=minimal",
-            },
+            headers=headers,
             json=rows,
         )
         _require_success(response, f"upsert {table}")
@@ -161,6 +158,23 @@ def _safe(value: Any) -> Any:
     if value is None or isinstance(value, (bool, int, float)):
         return value
     return str(value)[:10_000]
+
+
+def _server_key(keys: list[Mapping[str, Any]]) -> Mapping[str, Any] | None:
+    selected = next(
+        (
+            item for item in keys
+            if item.get("type") == "secret" and _revealed_key(item.get("api_key"))
+        ),
+        None,
+    )
+    if selected is not None:
+        return selected
+    return next((item for item in keys if item.get("name") == "service_role"), None)
+
+
+def _revealed_key(value: Any) -> bool:
+    return isinstance(value, str) and value.startswith("sb_secret_") and value.isascii()
 
 
 def _require_success(response: httpx.Response, action: str) -> None:
