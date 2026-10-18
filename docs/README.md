@@ -8,6 +8,7 @@ Start here if you are a new engineer or coding agent:
    failure diagnosis, recovery, and publication procedures.
 3. [`ARCHITECTURE.md`](ARCHITECTURE.md) — component and data-flow design.
 4. [`COST_AND_USAGE_LEDGER.md`](COST_AND_USAGE_LEDGER.md) — accounting rules.
+5. [`VLLM.md`](VLLM.md) — the vLLM inference backend, its deployment, and rollback.
 
 `BUILD_PLAN.md`, `HACKATHON_MASTER_PLAN.md`, `PROJECT_CONTEXT.md`, and the UX
 documents contain design history. Where they conflict with the handoff or

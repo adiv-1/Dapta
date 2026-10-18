@@ -65,6 +65,10 @@ def generation_messages(request: GenerateRequest) -> list[dict[str, str]]:
 
 
 class ModelRuntime:
+    """In-process transformers + PEFT generation (rollback path: DAPTA_QWEN_BACKEND=transformers)."""
+
+    backend = "transformers"
+
     def __init__(self) -> None:
         self.model: Any = None
         self.processor: Any = None
@@ -167,10 +171,23 @@ class ModelRuntime:
             "output_tokens": int(generated.shape[1]),
             "latency_ms": elapsed_ms,
             "ttft_ms": None,
+            "backend": self.backend,
         }
 
 
-runtime = ModelRuntime()
+def create_runtime() -> Any:
+    """vLLM by default; the transformers runtime stays available as a rollback."""
+    backend = os.environ.get("DAPTA_QWEN_BACKEND", "vllm").strip().lower()
+    if backend == "vllm":
+        from .vllm_backend import VllmRuntime
+
+        return VllmRuntime(build_messages=generation_messages)
+    if backend == "transformers":
+        return ModelRuntime()
+    raise RuntimeError(f"unknown DAPTA_QWEN_BACKEND: {backend}")
+
+
+runtime = create_runtime()
 
 
 @asynccontextmanager
@@ -196,6 +213,7 @@ def authorize(authorization: Optional[str] = Header(default=None)) -> None:
 def health() -> dict[str, Any]:
     return {
         "status": "ok",
+        "backend": runtime.backend,
         "model_loaded": runtime.model is not None,
         "loaded_adapters": list(runtime.loaded_adapters),
     }

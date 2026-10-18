@@ -439,6 +439,8 @@ class ComparisonService:
             })
             if call is not None:
                 call.set_data("dapta.retry_count", 0)
+                if response.get("backend"):
+                    call.set_data("dapta.inference_backend", response["backend"])
                 for key in ("latency_ms", "ttft_ms"):
                     if response.get(key) is not None:
                         call.set_data(f"dapta.worker.{key}", response[key])
@@ -461,7 +463,8 @@ class ComparisonService:
             completion_tokens=int(response.get("output_tokens") or 0),
             cost_usd=gpu_cost,
             cost_source="calculated",
-            metadata={"adapter_id": adapter["adapter_id"], "gpu_type": "A100-80GB"},
+            metadata={"adapter_id": adapter["adapter_id"], "gpu_type": "A100-80GB",
+                      "inference_backend": response.get("backend")},
         )
         output = _object(response.get("output"))
         return {
