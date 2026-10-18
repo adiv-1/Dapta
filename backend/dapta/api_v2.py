@@ -312,6 +312,15 @@ def create_app(database_path: Path | str | None = None) -> FastAPI:
         except (JobNotFound, InvalidTransition, JobBlocked, JobConflict, RuntimeError, ValueError) as error:
             raise HTTPException(status_code=409, detail=str(error)) from error
 
+    @app.post("/v1/jobs/{job_id}/retry", dependencies=protected)
+    def retry_job(job_id: str) -> dict[str, Any]:
+        try:
+            job = store.retry_failed(job_id)
+            runner.wake()
+            return job
+        except (JobNotFound, InvalidTransition, JobConflict) as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+
     @app.post("/v1/jobs/{job_id}/devin", status_code=202, dependencies=protected)
     def create_devin_session(job_id: str) -> dict[str, Any]:
         if devin is None:
@@ -329,7 +338,6 @@ def create_app(database_path: Path | str | None = None) -> FastAPI:
                     job_id=job_id,
                     workflow=job["workflow"],
                     skill_contract=contract,
-                    repository_url=os.environ.get("DAPTA_REPOSITORY_URL", "https://github.com/adiv-1/Dapta"),
                 )
             store.set_artifact(job_id, "devin_session.json", session.__dict__)
             return {"job": store.get_job(job_id), "devin": session.__dict__}

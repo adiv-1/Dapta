@@ -73,6 +73,8 @@ export type Job = {
     status: string;
     pull_request_url?: string;
     acus_consumed?: number;
+    status_detail?: string;
+    on_demand_usage?: number;
   };
   events?: Array<{
     sequence: number;
@@ -88,6 +90,15 @@ export type Job = {
     claimed_at: string;
     completed_at?: string;
   }>;
+  agent_outputs?: AgentOutput[];
+};
+
+export type AgentOutput = {
+  stage: string;
+  agent: string;
+  summary: string;
+  output: unknown;
+  source: string;
 };
 
 export type RouteDecision = {

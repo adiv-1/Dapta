@@ -144,9 +144,6 @@ class DevinIntegrator:
                     job_id=job_id,
                     workflow=str(job["workflow"]),
                     skill_contract=skill_contract,
-                    repository_url=os.environ.get(
-                        "DAPTA_REPOSITORY_URL", "https://github.com/adiv-1/Dapta"
-                    ),
                 )
             session_id = created.session_id
             self.store.set_artifact(job_id, "devin_session.json", created.__dict__)
@@ -160,13 +157,22 @@ class DevinIntegrator:
             })
             normalized = session.status.lower()
             if normalized in {"finished", "completed", "done"}:
-                if not session.pull_request_url:
-                    raise DevinError("Devin finished without a pull request URL")
-                return session.__dict__
+                return {
+                    **session.__dict__,
+                    "evidence_type": "huggingface_skill_bundle",
+                    "repository_write_required": False,
+                }
+            if (session.status_detail or "").lower() in {"waiting_for_user", "inactivity"}:
+                return {
+                    **session.__dict__,
+                    "evidence_type": "huggingface_skill_bundle",
+                    "repository_write_required": False,
+                    "note": "Devin preserved its scoped integration evidence; no GitHub action is required.",
+                }
             if normalized in {"failed", "error", "cancelled", "stopped"}:
                 raise DevinError(f"Devin session ended with status {session.status}")
             time.sleep(self.poll_seconds)
-        raise DevinError("Devin integration timed out before producing a tested pull request")
+        raise DevinError("Devin integration timed out before producing tested evidence")
 
 
 class QwenLifecycle:
@@ -413,7 +419,26 @@ class HuggingFacePublisher:
             str(job.get("skill_id") or skill_contract["skill_spec"].get("name") or job["job_id"])
         )
         path = f"generated/{skill_id}/{training['version']}"
-        (adapter_dir / "SKILL.md").write_text(_render_skill(skill_contract), encoding="utf-8")
+        skill_dir = adapter_dir / "skill"
+        skill_dir.mkdir(parents=True, exist_ok=True)
+        (skill_dir / "SKILL.md").write_text(_render_skill(skill_contract), encoding="utf-8")
+        (skill_dir / "skill_spec.json").write_text(
+            json.dumps(skill_contract["skill_spec"], indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        (skill_dir / "output_schema.json").write_text(
+            json.dumps(skill_contract["output_schema"], indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        (skill_dir / "evaluation_plan.json").write_text(
+            json.dumps(skill_contract["evaluation_plan"], indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        if skill_contract.get("integration") is not None:
+            (skill_dir / "integration_evidence.json").write_text(
+                json.dumps(skill_contract["integration"], indent=2, ensure_ascii=False),
+                encoding="utf-8",
+            )
         (adapter_dir / "metrics.json").write_text(
             json.dumps(evaluation, indent=2, ensure_ascii=False), encoding="utf-8"
         )
@@ -518,8 +543,13 @@ def _normalize_case(case: Any, split: str, index: int) -> dict[str, Any]:
 
 def _render_skill(contract: Mapping[str, Any]) -> str:
     spec = contract["skill_spec"]
+    public_contract = {
+        key: contract[key]
+        for key in ("skill_spec", "output_schema", "evaluation_plan")
+        if key in contract
+    }
     return "# " + str(spec.get("name") or "Dapta Skill") + "\n\n" + json.dumps(
-        contract, indent=2, ensure_ascii=False
+        public_contract, indent=2, ensure_ascii=False
     ) + "\n"
 
 

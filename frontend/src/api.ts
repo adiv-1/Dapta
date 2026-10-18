@@ -94,4 +94,6 @@ export const api = {
       headers: { "Idempotency-Key": crypto.randomUUID() },
       body: JSON.stringify({ workflow, route }),
     }),
+  retryJob: (jobId: string) =>
+    request<Job>(`/v1/jobs/${jobId}/retry`, { method: "POST", body: "{}" }),
 };

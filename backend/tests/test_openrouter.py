@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 
 from dapta.ledger import UsageLedger
-from dapta.openrouter import OpenRouterClient, OpenRouterError
+from dapta.openrouter import OpenRouterClient, OpenRouterError, _response_json
 
 
 class FakeTransport:
@@ -124,6 +124,22 @@ class OpenRouterTests(unittest.TestCase):
         self.assertEqual(status, "failed")
         self.assertNotIn("private workflow", metadata)
         self.assertEqual(self.ledger.run_summary("job-1")["model_cost_usd"], "0")
+
+    def test_structured_text_content_is_parsed(self):
+        result = _response_json({
+            "choices": [{
+                "message": {
+                    "content": [{"type": "text", "text": '{"result":"ok"}'}],
+                },
+            }],
+        })
+        self.assertEqual(result, {"result": "ok"})
+
+    def test_object_content_is_accepted_directly(self):
+        result = _response_json({
+            "choices": [{"message": {"content": {"result": "ok"}}}],
+        })
+        self.assertEqual(result, {"result": "ok"})
 
 
 if __name__ == "__main__":

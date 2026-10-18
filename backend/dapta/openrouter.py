@@ -318,8 +318,9 @@ def _response_json(response: Mapping[str, Any]) -> dict[str, Any]:
         content = response["choices"][0]["message"]["content"]
     except (KeyError, IndexError, TypeError) as error:
         raise OpenRouterError("OpenRouter response did not contain assistant content") from error
-    if not isinstance(content, str):
-        raise OpenRouterError("OpenRouter assistant content was not text")
+    if isinstance(content, Mapping) and "type" not in content:
+        return dict(content)
+    content = _content_text(content)
     try:
         value = json.loads(content)
     except json.JSONDecodeError as error:
@@ -327,6 +328,30 @@ def _response_json(response: Mapping[str, Any]) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise OpenRouterError("OpenRouter agent response must be a JSON object")
     return value
+
+
+def _content_text(content: Any) -> str:
+    if isinstance(content, str):
+        return content
+    if isinstance(content, Mapping):
+        for key in ("text", "content", "output_text"):
+            value = content.get(key)
+            if isinstance(value, str):
+                return value
+    if isinstance(content, list):
+        parts: list[str] = []
+        for item in content:
+            if isinstance(item, str):
+                parts.append(item)
+            elif isinstance(item, Mapping):
+                for key in ("text", "content", "output_text"):
+                    value = item.get(key)
+                    if isinstance(value, str):
+                        parts.append(value)
+                        break
+        if parts:
+            return "".join(parts)
+    raise OpenRouterError("OpenRouter assistant content was not text")
 
 
 def _safe_error(body: str) -> str:

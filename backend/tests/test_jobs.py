@@ -30,7 +30,8 @@ class FakeIntegrator:
         return {
             "session_id": "devin-session-1",
             "status": "completed",
-            "pull_request_url": "https://github.com/adiv-1/Dapta/pull/1",
+            "pull_request_url": None,
+            "evidence_type": "session",
         }
 
 
@@ -165,6 +166,9 @@ class JobTests(unittest.TestCase):
         self.assertTrue(job["publish_result"]["artifact_uri"].startswith("hf://"))
         self.assertEqual(len(self.store.list_adapters()), 1)
         self.assertTrue(all(attempt["status"] == "completed" for attempt in job["stage_attempts"]))
+        self.assertEqual(job["agent_outputs"][0]["agent"], "Kimi K3 — Skill Architect")
+        self.assertEqual(job["agent_outputs"][-1]["stage"], "publishing")
+        self.assertNotIn("dataset", job)
 
     def test_failed_evaluation_repairs_dev_but_preserves_frozen_test(self):
         orchestrator = self.orchestrator(fail_first=True)
@@ -236,6 +240,26 @@ class JobTests(unittest.TestCase):
         )
         self.assertEqual(adapter["metadata"], {"dataset_hash": "abc"})
         self.assertEqual(self.store.list_adapters(), [adapter])
+
+    def test_failed_stage_can_be_retried_from_the_same_stage(self):
+        job = self.store.create_job(
+            workflow="Build a stable repeated reporting specialist.",
+            idempotency_key="retry-stage-001",
+        )
+        self.store.claim_stage(
+            job["job_id"], "skill_architect", enter_status="architecting"
+        )
+        self.store.complete_stage(
+            job["job_id"], "skill_architect", status="failed"
+        )
+        self.store.fail(job["job_id"], code="ProviderError", message="temporary")
+
+        retried = self.store.retry_failed(job["job_id"])
+
+        self.assertEqual(retried["status"], "architecting")
+        self.assertIsNone(retried["failure_code"])
+        self.assertEqual(retried["stage_attempts"][0]["status"], "interrupted")
+        self.assertTrue(retried["events"][-1]["metadata"]["retry"])
 
 
 if __name__ == "__main__":

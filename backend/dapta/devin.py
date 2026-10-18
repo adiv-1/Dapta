@@ -19,6 +19,8 @@ class DevinSession:
     status: str
     pull_request_url: str | None = None
     acus_consumed: float | None = None
+    status_detail: str | None = None
+    on_demand_usage: float | None = None
 
 
 class DevinClient:
@@ -44,15 +46,15 @@ class DevinClient:
         job_id: str,
         workflow: str,
         skill_contract: Mapping[str, Any],
-        repository_url: str,
     ) -> DevinSession:
         prompt = (
-            "Implement one scoped Dapta skill integration in the supplied repository. "
-            "Create SKILL.md, a deterministic dataset adapter, validator, and tests from "
-            "the contract below. Do not edit frozen test labels or quality thresholds. "
-            "Run the tests and open a reviewable pull request.\n\n"
-            f"Job: {job_id}\nWorkflow: {workflow}\nRepository: {repository_url}\n"
-            f"Target branch: {os.environ.get('DAPTA_REPOSITORY_BRANCH', 'initial-dapta')}\n"
+            "Create one self-contained Dapta skill integration bundle from the contract below. "
+            "Produce SKILL.md, validator_spec.json, test_plan.json, and a concise integration "
+            "report. Validate that the schema and tests are internally consistent. Do not "
+            "modify, push to, or open a pull request against any GitHub repository. The bundle "
+            "will be stored with the trained adapter in Hugging Face. Do not edit frozen test "
+            "labels or quality thresholds.\n\n"
+            f"Job: {job_id}\nWorkflow: {workflow}\n"
             f"Contract: {json.dumps(dict(skill_contract), ensure_ascii=False)}"
         )
         payload = self._request(
@@ -97,10 +99,17 @@ def _session(payload: Mapping[str, Any]) -> DevinSession:
         raise DevinError("Devin response did not include a session ID")
     pull_request = payload.get("pull_request") or {}
     pull_request_url = pull_request.get("url") if isinstance(pull_request, Mapping) else None
+    pull_requests = payload.get("pull_requests")
+    if not pull_request_url and isinstance(pull_requests, list) and pull_requests:
+        first = pull_requests[0]
+        if isinstance(first, Mapping):
+            pull_request_url = first.get("url") or first.get("html_url")
     return DevinSession(
         session_id=session_id,
         url=payload.get("url"),
         status=str(payload.get("status_enum") or payload.get("status") or "created"),
         pull_request_url=pull_request_url,
         acus_consumed=payload.get("acus_consumed"),
+        status_detail=str(payload.get("status_detail") or "") or None,
+        on_demand_usage=payload.get("on_demand_usage"),
     )

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity, ArrowUp, BarChart3, BrainCircuit, Check, Clock3, Cpu,
-  Database, FileText, GitPullRequest, Layers3, Loader2, Plus, Router,
+  Database, FileText, Layers3, Loader2, PackageCheck, Plus, Router,
   ShieldCheck, Sparkles, Upload, UploadCloud, X,
 } from "lucide-react";
 import { api } from "./api";
@@ -142,6 +142,10 @@ export default function App() {
             selectedJob={selectedJob}
             setSelectedJob={setSelectedJob}
             onTest={() => setTab("chat")}
+            onRetry={async (jobId) => {
+              const retried = await api.retryJob(jobId);
+              setJobs((current) => current.map((item) => item.job_id === jobId ? retried : item));
+            }}
           />
         )}
       </main>
@@ -224,7 +228,7 @@ function MetricChart({ title, suffix, lower, conditions, field }: { title: strin
 const factoryStages = [
   { key: "queued", label: "JEV Router", detail: "Adapter match and trainability", icon: Router },
   { key: "architecting", label: "Kimi K3 — Skill Architect", detail: "Skill spec, schema, evaluation plan", icon: BrainCircuit },
-  { key: "integrating", label: "Devin — Skill Integration", detail: "SKILL.md, validators, tests, PR evidence", icon: GitPullRequest },
+  { key: "integrating", label: "Devin — Skill Integration", detail: "SKILL.md, validator spec, tests, Hugging Face bundle", icon: PackageCheck },
   { key: "building_dataset", label: "Kimi K3 — Data Builder", detail: "TRAIN, DEV, frozen TEST, OOD", icon: Database },
   { key: "validating", label: "Dataset Validator", detail: "Schema, leakage, duplicates, hashes", icon: ShieldCheck },
   { key: "awaiting_compute", label: "Compute Gate", detail: "Budget and GPU readiness", icon: Clock3 },
@@ -233,9 +237,10 @@ const factoryStages = [
   { key: "publishing", label: "Hugging Face Registry", detail: "Weights, metrics, manifest", icon: UploadCloud },
 ] as const;
 
-function Registry({ adapters, jobs, selectedJob, setSelectedJob, onTest }: {
+function Registry({ adapters, jobs, selectedJob, setSelectedJob, onTest, onRetry }: {
   adapters: Adapter[]; jobs: Job[]; selectedJob?: string;
   setSelectedJob: (id: string) => void; onTest: () => void;
+  onRetry: (jobId: string) => Promise<void>;
 }) {
   const job = jobs.find((item) => item.job_id === selectedJob) || jobs[0];
   return (
@@ -246,7 +251,7 @@ function Registry({ adapters, jobs, selectedJob, setSelectedJob, onTest }: {
           {jobs.map((item) => <button key={item.job_id} className={job?.job_id === item.job_id ? "active" : ""} onClick={() => setSelectedJob(item.job_id)}>{item.skill_id || "New specialist"}<small>{stageLabel(item.status)}</small></button>)}
         </div>
       )}
-      {job && <FactoryTimeline job={job} />}
+      {job && <FactoryTimeline job={job} onRetry={onRetry} />}
       <div className="registry-heading"><div><h2>Adapter registry</h2><p>Ready specialists restored from Hugging Face.</p></div><button onClick={onTest}><Plus size={16} />New specialist</button></div>
       <div className="registry-grid">
         {adapters.map((adapter) => <article className="adapter-card" key={adapter.adapter_id}><div className="adapter-icon"><FileText /></div><span className="ready"><span />Ready</span><h2>{String(adapter.metadata.name || adapter.skill_id)}</h2><p>{String(adapter.metadata.description || "Reusable LoRA adapter")}</p><dl><div><dt>Base model</dt><dd>{adapter.base_model.split("/").pop()}</dd></div><div><dt>Field F1</dt><dd>{(Number(adapter.metadata.benchmark_accuracy || 0) * 100).toFixed(1)}%</dd></div><div><dt>Version</dt><dd>{adapter.version}</dd></div></dl><button onClick={onTest}>Test adapter</button></article>)}
@@ -256,7 +261,7 @@ function Registry({ adapters, jobs, selectedJob, setSelectedJob, onTest }: {
   );
 }
 
-function FactoryTimeline({ job }: { job: Job }) {
+function FactoryTimeline({ job, onRetry }: { job: Job; onRetry: (jobId: string) => Promise<void> }) {
   const backendOrder = ["queued", "architecting", "integrating", "building_dataset", "validating", "awaiting_compute", "provisioning_gpu", "training", "evaluating", "publishing", "ready"];
   const failedFrom = [...(job.events || [])].reverse().find((event) => event.to_status === "failed")?.from_status;
   const effectiveStatus = job.status === "failed" ? failedFrom || "queued" : job.status;
@@ -267,8 +272,9 @@ function FactoryTimeline({ job }: { job: Job }) {
     <article className={`factory-panel ${job.status}`}>
       <div className="factory-head"><div><span className="factory-state">{job.status === "ready" ? <Check size={14} /> : job.status === "failed" ? <X size={14} /> : <Loader2 className="spin" size={14} />}{stageLabel(job.status)}</span><h2>{job.skill_id || "New LoRA specialist"}</h2><p>{job.workflow}</p></div><div className="factory-percent"><strong>{Math.round(overall)}%</strong><span>Round {job.dataset_round || 1}</span></div></div>
       <div className="factory-progress"><span style={{ width: `${overall}%` }} /></div>
-      <div className="pipeline">
-        {factoryStages.map((stage) => {
+      <div className="factory-workspace">
+        <div className="pipeline">
+          {factoryStages.map((stage) => {
           const stageBackendIndex = backendOrder.indexOf(stage.key);
           const completed = job.status === "ready"
             || (stage.key === "queued" && Boolean(job.route))
@@ -282,12 +288,62 @@ function FactoryTimeline({ job }: { job: Job }) {
             || (stage.key === "training" && effectiveStatus === "provisioning_gpu")
           );
           const Icon = stage.icon;
-          return <div className={`pipeline-step ${completed ? "complete" : active ? "active" : failed ? "failed" : "pending"}`} key={stage.key}><div className="pipeline-icon">{completed ? <Check /> : failed ? <X /> : active ? <Loader2 className="spin" /> : <Icon />}</div><div><strong>{stage.label}</strong><span>{stage.detail}</span>{stage.key === "queued" && job.route && <small>{job.route.decision} · {Math.round(job.route.confidence * 100)}% · {job.route.reason}</small>}{stage.key === "integrating" && job.devin_session && <small>{job.devin_session.status}{job.devin_session.pull_request_url ? " · PR ready" : ""}</small>}{stage.key === "validating" && job.validation && <small>Frozen TEST: {String(job.validation.frozen_test_sha256 || "pending").slice(0, 14)}…</small>}{stage.key === "training" && active && progress && <TrainingTelemetry progress={progress} />}{stage.key === "publishing" && job.publish_result && <a href={job.publish_result.artifact_uri.replace("hf://", "https://huggingface.co/")} target="_blank" rel="noreferrer">Open adapter ↗</a>}</div></div>;
-        })}
+            const devinLabel = ["waiting_for_user", "inactivity"].includes(job.devin_session?.status_detail || "")
+              ? "bundle complete · saving outside GitHub"
+              : job.devin_session?.status;
+            return <div className={`pipeline-step ${completed ? "complete" : active ? "active" : failed ? "failed" : "pending"}`} key={stage.key}><div className="pipeline-icon">{completed ? <Check /> : failed ? <X /> : active ? <Loader2 className="spin" /> : <Icon />}</div><div><strong>{stage.label}</strong><span>{stage.detail}</span>{stage.key === "queued" && job.route && <small>{job.route.decision} · {Math.round(job.route.confidence * 100)}% · {job.route.reason}</small>}{stage.key === "integrating" && job.devin_session && <small>{devinLabel}{job.devin_session.pull_request_url ? " · PR ready" : ""}</small>}{stage.key === "validating" && job.validation && <small>Frozen TEST: {String(job.validation.frozen_test_sha256 || "pending").slice(0, 14)}…</small>}{stage.key === "training" && active && progress && <TrainingTelemetry progress={progress} />}{stage.key === "publishing" && job.publish_result && <a href={job.publish_result.artifact_uri.replace("hf://", "https://huggingface.co/")} target="_blank" rel="noreferrer">Open adapter ↗</a>}</div></div>;
+          })}
+        </div>
+        <AgentOutputPanel job={job} />
       </div>
-      {job.failure_message && <div className="factory-error"><strong>{job.failure_code}</strong>{job.failure_message}</div>}
+      {job.failure_message && <div className="factory-error"><div><strong>{job.failure_code}</strong><span>{job.failure_message}</span></div><button onClick={() => onRetry(job.job_id)}>Retry stage</button></div>}
       {job.deterministic_evaluation?.conditions && <FactoryResults evaluation={job.deterministic_evaluation} />}
     </article>
+  );
+}
+
+function AgentOutputPanel({ job }: { job: Job }) {
+  const outputs = job.agent_outputs || [];
+  const [selected, setSelected] = useState(0);
+
+  useEffect(() => {
+    setSelected(Math.max(0, outputs.length - 1));
+  }, [job.job_id, outputs.length]);
+
+  const current = outputs[selected];
+  return (
+    <aside className="agent-output-panel">
+      <div className="agent-output-head">
+        <div><span className="live-dot" />Live agent output</div>
+        <small>Sanitized · saved to Supabase</small>
+      </div>
+      {outputs.length ? (
+        <>
+          <div className="agent-output-tabs">
+            {outputs.map((output, index) => (
+              <button
+                className={index === selected ? "active" : ""}
+                key={`${output.stage}-${index}`}
+                onClick={() => setSelected(index)}
+              >
+                <span>{output.agent}</span>
+                <small>{output.summary}</small>
+              </button>
+            ))}
+          </div>
+          <div className="agent-output-body">
+            <div><strong>{current.agent}</strong><span>{current.summary}</span></div>
+            <pre>{JSON.stringify(current.output, null, 2)}</pre>
+          </div>
+        </>
+      ) : (
+        <div className="agent-output-empty">
+          <Loader2 className="spin" />
+          <strong>Waiting for the first artifact</strong>
+          <span>Agent decisions will appear here as they are saved.</span>
+        </div>
+      )}
+    </aside>
   );
 }
 

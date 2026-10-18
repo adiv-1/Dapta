@@ -90,7 +90,13 @@ export default async function (request: Request): Promise<Response> {
   let result: unknown;
   try { result = JSON.parse(text); } catch { result = { detail: text }; }
 
-  if (upstream.ok) await mirrorSnapshots(base44, payload.path, result);
+  if (upstream.ok) {
+    try {
+      await mirrorSnapshots(base44, payload.path, result);
+    } catch (error) {
+      console.warn("Snapshot mirror skipped", error instanceof Error ? error.message : error);
+    }
+  }
   return Response.json(result, { status: upstream.status });
 }
 
@@ -113,11 +119,12 @@ async function mirrorSnapshots(base44: any, path: string, result: any): Promise<
     if (!record || typeof record !== "object") continue;
     const externalId = String(record.run_id || record.job_id || record.adapter_id || record.benchmark_id || "");
     if (!externalId) continue;
+    const snapshotRecord = kind === "job" ? compactJob(record) : record;
     const snapshot = {
       external_id: externalId,
       kind,
       status: String(record.status || "stored"),
-      payload_json: JSON.stringify(record),
+      payload_json: JSON.stringify(snapshotRecord),
       source_updated_at: String(record.updated_at || record.created_at || new Date().toISOString()),
     };
     const existing = await base44.asServiceRole.entities.DaptaSnapshot.filter(
@@ -126,4 +133,27 @@ async function mirrorSnapshots(base44: any, path: string, result: any): Promise<
     if (existing.length) await base44.asServiceRole.entities.DaptaSnapshot.update(existing[0].id, snapshot);
     else await base44.asServiceRole.entities.DaptaSnapshot.create(snapshot);
   }
+}
+
+function compactJob(record: any): any {
+  return {
+    job_id: record.job_id,
+    skill_id: record.skill_id,
+    status: record.status,
+    dataset_round: record.dataset_round,
+    progress: record.progress,
+    validation: record.validation,
+    deterministic_evaluation: record.deterministic_evaluation,
+    publish_result: record.publish_result,
+    agent_outputs: Array.isArray(record.agent_outputs)
+      ? record.agent_outputs.map((output: any) => ({
+        stage: output.stage,
+        agent: output.agent,
+        summary: output.summary,
+        source: output.source,
+      }))
+      : [],
+    created_at: record.created_at,
+    updated_at: record.updated_at,
+  };
 }

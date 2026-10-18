@@ -186,7 +186,8 @@ class JobStore:
                 WHERE job_id = ? AND name IN (
                     'route_decision.json', 'progress.json', 'validation.json',
                     'deterministic_evaluation.json', 'publish_result.json',
-                    'devin_session.json'
+                    'devin_session.json', 'devin_result.json', 'integration.json',
+                    'skill_spec.json', 'output_schema.json', 'evaluation_plan.json'
                 )
                 """,
                 (job_id,),
@@ -202,6 +203,10 @@ class JobStore:
         for item in live:
             key = item["name"].removesuffix(".json").replace("route_decision", "route")
             job[key] = json.loads(item["content_json"])
+        training_name = _round_name("training.json", job["dataset_round"])
+        if any(item["name"] == training_name for item in job["artifacts"]):
+            job["training"] = _training_summary(self.get_artifact(job_id, training_name))
+        job["agent_outputs"] = _agent_outputs(job)
         return job
 
     def list_jobs(self, *, limit: int = 100) -> list[dict[str, Any]]:
@@ -272,6 +277,61 @@ class JobStore:
                     """,
                     (str(uuid.uuid4()), job_id, from_status, now, _json({"code": code})),
                 )
+        return self.get_job(job_id)
+
+    def retry_failed(self, job_id: str) -> dict[str, Any]:
+        now = _timestamp()
+        with self._connect(immediate=True) as connection:
+            current = connection.execute(
+                "SELECT status FROM jobs WHERE job_id = ?", (job_id,)
+            ).fetchone()
+            if current is None:
+                raise JobNotFound(job_id)
+            if current["status"] != "failed":
+                raise InvalidTransition("only a failed job can be retried")
+            failed_event = connection.execute(
+                """
+                SELECT from_status FROM job_events
+                WHERE job_id=? AND to_status='failed'
+                ORDER BY sequence DESC LIMIT 1
+                """,
+                (job_id,),
+            ).fetchone()
+            if failed_event is None or failed_event["from_status"] not in JOB_STAGES:
+                raise JobConflict("failed job has no resumable stage")
+            attempt = connection.execute(
+                """
+                SELECT stage, round FROM job_stage_attempts
+                WHERE job_id=? AND status='failed'
+                ORDER BY claimed_at DESC LIMIT 1
+                """,
+                (job_id,),
+            ).fetchone()
+            if attempt is not None:
+                connection.execute(
+                    """
+                    UPDATE job_stage_attempts
+                    SET status='interrupted', completed_at=?
+                    WHERE job_id=? AND stage=? AND round=? AND status='failed'
+                    """,
+                    (now, job_id, attempt["stage"], attempt["round"]),
+                )
+            resume_status = failed_event["from_status"]
+            connection.execute(
+                """
+                UPDATE jobs SET status=?, failure_code=NULL, failure_message=NULL, updated_at=?
+                WHERE job_id=?
+                """,
+                (resume_status, now, job_id),
+            )
+            connection.execute(
+                """
+                INSERT INTO job_events(
+                    event_id, job_id, from_status, to_status, occurred_at, metadata_json
+                ) VALUES (?, ?, 'failed', ?, ?, ?)
+                """,
+                (str(uuid.uuid4()), job_id, resume_status, now, _json({"retry": True})),
+            )
         return self.get_job(job_id)
 
     def put_artifact(
@@ -637,8 +697,8 @@ class AdapterJobOrchestrator:
             raise JobBlocked("integrating: Devin is not configured")
         def work() -> str:
             result = dict(self.integrator.integrate(job=job, skill_contract=self._contract(job_id)))
-            if not result.get("session_id") or not result.get("pull_request_url"):
-                raise ValueError("Devin integration did not produce a pull request")
+            if not result.get("session_id"):
+                raise ValueError("Devin integration did not produce session evidence")
             self.store.put_artifact(job_id, "integration.json", result)
             return "building_dataset"
         return self._stage(job_id, "skill_integration", 1, work)
@@ -755,6 +815,7 @@ class AdapterJobOrchestrator:
         training = self.store.get_artifact(job_id, _round_name("training.json", round))
         evaluation = self.store.get_artifact(job_id, _round_name("deterministic_evaluation.json", round))
         contract = self._contract(job_id)
+        contract["integration"] = self.store.get_artifact(job_id, "integration.json")
         def work() -> str:
             uri = self.publisher.promote(
                 job=job, training=training, evaluation=evaluation, skill_contract=contract,
@@ -913,6 +974,67 @@ def _finish_attempt(store: JobStore, job_id: str, stage: str, round: int) -> Non
         store.complete_stage(job_id, stage, status="failed", round=round)
     except JobConflict:
         pass
+
+
+def _training_summary(value: Any) -> dict[str, Any]:
+    if not isinstance(value, Mapping):
+        return {"status": "saved"}
+    metrics = value.get("metrics") if isinstance(value.get("metrics"), Mapping) else {}
+    return {
+        key: item for key, item in {
+            "adapter_id": value.get("adapter_id"),
+            "base_model": value.get("base_model"),
+            "version": value.get("version"),
+            "training_seconds": value.get("training_seconds") or metrics.get("training_seconds"),
+            "training_cost_usd": value.get("training_cost_usd"),
+            "peak_gpu_memory_gb": value.get("peak_gpu_memory_gb") or metrics.get("peak_gpu_memory_gb"),
+            "mean_gpu_utilization_percent": value.get("mean_gpu_utilization_percent")
+            or metrics.get("mean_gpu_utilization_percent"),
+        }.items() if item is not None
+    }
+
+
+def _agent_outputs(job: Mapping[str, Any]) -> list[dict[str, Any]]:
+    outputs: list[dict[str, Any]] = []
+
+    def add(stage: str, agent: str, summary: str, output: Any) -> None:
+        if output is None:
+            return
+        outputs.append({
+            "stage": stage,
+            "agent": agent,
+            "summary": summary,
+            "output": output,
+            "source": "Supabase mirror",
+        })
+
+    add("queued", "JEV Router", "Routing decision", job.get("route"))
+    architect = {
+        key: job[key] for key in ("skill_spec", "output_schema", "evaluation_plan")
+        if key in job
+    }
+    add("architecting", "Kimi K3 — Skill Architect", "Skill contract", architect or None)
+    devin = job.get("devin_result") or job.get("integration") or job.get("devin_session")
+    add("integrating", "Devin — Skill Integration", "Implementation evidence", devin)
+    validation = job.get("validation")
+    if isinstance(validation, Mapping):
+        add("building_dataset", "Kimi K3 — Data Builder", "Generated split counts", {
+            "round": validation.get("round"),
+            "counts": validation.get("counts"),
+        })
+    add("validating", "Dataset Validator", "Deterministic validation", validation)
+    progress = job.get("progress")
+    if isinstance(progress, Mapping) and progress.get("stage") in {
+        "awaiting_compute", "provisioning_gpu", "training",
+    }:
+        add("training", "RunPod Training Worker", "Live compute telemetry", progress)
+    add("training", "RunPod Training Worker", "Saved training metrics", job.get("training"))
+    add(
+        "evaluating", "Independent Evaluator", "Base vs Skill vs LoRA",
+        job.get("deterministic_evaluation"),
+    )
+    add("publishing", "Hugging Face Registry", "Published adapter", job.get("publish_result"))
+    return outputs
 
 
 def _event_dict(row: sqlite3.Row) -> dict[str, Any]:
