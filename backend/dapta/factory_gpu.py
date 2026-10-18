@@ -10,6 +10,15 @@ from pathlib import Path
 from typing import Any, Mapping
 
 
+def training_time_exceeded(
+    started: float, maximum_seconds: float, *, now: float | None = None
+) -> bool:
+    if maximum_seconds <= 0:
+        return False
+    current = time.perf_counter() if now is None else now
+    return current - started >= maximum_seconds
+
+
 def progress(**values: Any) -> None:
     print(json.dumps({"type": "progress", **values}, separators=(",", ":")), flush=True)
 
@@ -200,6 +209,8 @@ def run(bundle: Mapping[str, Any]) -> dict[str, Any]:
     dev_dataset = Dataset.from_list([_sft_case(case, skill) for case in dev_cases])
     epochs = float(bundle["epochs"])
     max_length = int(bundle["max_length"])
+    max_steps = int(bundle.get("max_steps", -1))
+    max_training_seconds = float(bundle.get("max_training_seconds", 0))
     lora = LoraConfig(
         r=16,
         lora_alpha=32,
@@ -214,6 +225,7 @@ def run(bundle: Mapping[str, Any]) -> dict[str, Any]:
     training_args = SFTConfig(
         output_dir=str(output_dir / "trainer"),
         num_train_epochs=epochs,
+        max_steps=max_steps,
         per_device_train_batch_size=1,
         per_device_eval_batch_size=1,
         gradient_accumulation_steps=8,
@@ -239,13 +251,36 @@ def run(bundle: Mapping[str, Any]) -> dict[str, Any]:
     )
 
     class ProgressCallback(TrainerCallback):
-        started = time.perf_counter()
+        started = 0.0
+        stopped_by_time_limit = False
+
+        def on_train_begin(
+            self, args: Any, state: Any, control: Any, **kwargs: Any
+        ) -> None:
+            del args, state, control, kwargs
+            self.started = time.perf_counter()
+
+        def _stop_if_expired(self, control: Any) -> Any:
+            if self.started and training_time_exceeded(
+                self.started, max_training_seconds
+            ):
+                self.stopped_by_time_limit = True
+                control.should_training_stop = True
+            return control
+
+        def on_step_end(self, args: Any, state: Any, control: Any, **kwargs: Any) -> Any:
+            del args, state, kwargs
+            return self._stop_if_expired(control)
+
+        def on_substep_end(self, args: Any, state: Any, control: Any, **kwargs: Any) -> Any:
+            del args, state, kwargs
+            return self._stop_if_expired(control)
 
         def on_log(self, args: Any, state: Any, control: Any, logs: Any = None, **kwargs: Any) -> None:
             del args, control, kwargs
             current = int(state.global_step)
             total = max(1, int(state.max_steps))
-            elapsed = time.perf_counter() - self.started
+            elapsed = time.perf_counter() - self.started if self.started else 0
             eta = elapsed / current * (total - current) if current else None
             progress(
                 stage="training",
@@ -259,6 +294,7 @@ def run(bundle: Mapping[str, Any]) -> dict[str, Any]:
                 gpu_utilization_percent=_gpu_utilization(),
             )
 
+    progress_callback = ProgressCallback()
     trainer = SFTTrainer(
         model=model,
         args=training_args,
@@ -266,7 +302,7 @@ def run(bundle: Mapping[str, Any]) -> dict[str, Any]:
         eval_dataset=dev_dataset,
         processing_class=processor,
         peft_config=lora,
-        callbacks=[ProgressCallback()],
+        callbacks=[progress_callback],
     )
     progress(stage="training", message="QLoRA training started", percent=15)
     started = time.perf_counter()
@@ -305,6 +341,8 @@ def run(bundle: Mapping[str, Any]) -> dict[str, Any]:
         "base_model": base_model,
         "adapter_dir": str(output_dir),
         "training_seconds": training_seconds,
+        "training_limit_seconds": max_training_seconds or None,
+        "training_stopped_by_time_limit": progress_callback.stopped_by_time_limit,
         "train_examples": len(train_cases),
         "validation_examples": len(dev_cases),
         "test_examples": len(test_cases),
