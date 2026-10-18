@@ -250,6 +250,10 @@ def create_app(database_path: Path | str | None = None) -> FastAPI:
         if tool_name == "get_job_status":
             return _get_job(store, str(arguments.get("job_id") or ""))
         if tool_name == "create_adapter":
+            from .factory_limits import smoke_training_limits, training_access_open
+
+            if not training_access_open():
+                raise HTTPException(status_code=403, detail="Adapter training access is disabled")
             key = request.idempotency_key or str(arguments.get("idempotency_key") or "")
             if len(key) < 8:
                 raise HTTPException(status_code=422, detail="idempotency_key is required")
@@ -257,7 +261,9 @@ def create_app(database_path: Path | str | None = None) -> FastAPI:
                 workflow=str(arguments.get("workflow") or ""),
                 skill_id=arguments.get("skill_id"),
             )
-            return _create_job(orchestrator, payload, key, runner)
+            job = _create_job(orchestrator, payload, key, runner)
+            store.set_artifact(str(job["job_id"]), "training_limits.json", smoke_training_limits())
+            return job
         if tool_name == "run_comparison":
             key = request.idempotency_key or str(arguments.get("idempotency_key") or "")
             if len(key) < 8:

@@ -62,6 +62,7 @@ class FactoryAgentGateway(Protocol):
     def build_dataset(
         self, *, run_id: str, workflow: str, skill_contract: Mapping[str, Any],
         feedback: Mapping[str, Any] | None = None,
+        dataset_instruction: str | None = None,
     ) -> Mapping[str, Any]: ...
 
     def evaluate(
@@ -803,6 +804,7 @@ class AdapterJobOrchestrator:
         round = job["dataset_round"]
         if self.dataset_source is None:
             raise JobBlocked("building_dataset: dataset source is not configured")
+        job = self._attach_training_limits(job)
         def work() -> str:
             dataset = dict(self.dataset_source.build(
                 job=job, round=round, skill_contract=self._contract(job_id),
@@ -820,6 +822,7 @@ class AdapterJobOrchestrator:
         round = job["dataset_round"]
         if self.dataset_source is None:
             raise JobBlocked("validating: deterministic validator is not configured")
+        job = self._attach_training_limits(job)
         def work() -> str:
             report = dict(self.dataset_source.validate(
                 job=job, round=round,
@@ -860,6 +863,7 @@ class AdapterJobOrchestrator:
         round = job["dataset_round"]
         if self.trainer is None:
             raise JobBlocked("provisioning_gpu: training backend is not configured")
+        job = self._attach_training_limits(job)
         def work() -> str:
             result = dict(self.trainer.train(
                 job=job, round=round,
@@ -902,7 +906,7 @@ class AdapterJobOrchestrator:
                 if reason == "evaluation_output_truncated":
                     raise EvaluationOutputTruncated(reason)
                 raise ValueError(reason)
-            if round < self._round_limit():
+            if round < self._round_limit(job_id):
                 return "building_dataset"
             raise ValueError(f"adapter failed evaluation after {round} data rounds")
         return self._stage(job_id, "independent_evaluator", round, work)
@@ -1041,9 +1045,31 @@ class AdapterJobOrchestrator:
         )
         return {"round": round - 1, "dev_feedback": previous.get("dev_feedback", {})}
 
-    def _round_limit(self) -> int:
+    def _round_limit(self, job_id: str | None = None) -> int:
         source = getattr(self.dataset_source, "max_rounds", self.max_dataset_rounds)
-        return min(self.max_dataset_rounds, source)
+        limit = min(self.max_dataset_rounds, source)
+        if job_id is None:
+            return limit
+        try:
+            saved = self.store.get_artifact(job_id, "training_limits.json")
+        except JobNotFound:
+            return limit
+        if isinstance(saved, Mapping) and saved.get("profile") == "smoke":
+            return min(limit, 1)
+        return limit
+
+    def _attach_training_limits(self, job: dict[str, Any]) -> dict[str, Any]:
+        try:
+            saved = self.store.get_artifact(str(job["job_id"]), "training_limits.json")
+        except JobNotFound:
+            return job
+        if isinstance(saved, Mapping) and saved.get("profile") == "smoke":
+            from .factory_limits import smoke_training_limits
+
+            attached = dict(job)
+            attached["training_limits"] = smoke_training_limits()
+            return attached
+        return job
 
     def _require(self, job_id: str, allowed: set[str]) -> dict[str, Any]:
         job = self.store.get_job(job_id)

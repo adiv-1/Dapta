@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from .devin import DevinClient, DevinError
+from .factory_limits import DatasetPolicy, SMOKE_PROFILE, apply_smoke_training_limits, smoke_dataset_policy
 from .jobs import (
     AdapterJobOrchestrator,
     JobBlocked,
@@ -43,10 +44,12 @@ def evaluation_allocation_id(job_id: str, round: int) -> str:
 
 
 class AgentDatasetSource:
-    max_rounds = 3
-
     def __init__(self, agents: Any):
         self.agents = agents
+        self.policy = DatasetPolicy.from_env()
+        self.max_rounds = int(os.environ.get("DAPTA_FACTORY_MAX_DATASET_ROUNDS", "3"))
+        if self.max_rounds < 1:
+            raise ValueError("DAPTA_FACTORY_MAX_DATASET_ROUNDS must be at least 1")
 
     def build(
         self,
@@ -58,16 +61,24 @@ class AgentDatasetSource:
         feedback: Mapping[str, Any] | None,
     ) -> Mapping[str, Any]:
         del integration
+        policy = self._policy_for(job)
+        instruction = (
+            policy.generation_instruction()
+            if isinstance(job.get("training_limits"), Mapping)
+            else None
+        )
         result = self.agents.build_dataset(
             run_id=str(job["job_id"]),
             workflow=str(job["workflow"]),
             skill_contract=skill_contract,
             feedback=feedback,
+            dataset_instruction=instruction,
         )
-        return {
+        normalized = {
             split: [_normalize_case(case, split, index) for index, case in enumerate(result[split])]
             for split in ("train", "dev", "test", "ood")
         }
+        return policy.bound(normalized)
 
     def validate(
         self,
@@ -78,15 +89,11 @@ class AgentDatasetSource:
         integration: Mapping[str, Any],
         skill_contract: Mapping[str, Any],
     ) -> Mapping[str, Any]:
-        del job, integration
+        del integration
         import jsonschema
 
-        minimums = {
-            "train": int(os.environ.get("DAPTA_MIN_TRAIN_EXAMPLES", "16")),
-            "dev": int(os.environ.get("DAPTA_MIN_DEV_EXAMPLES", "4")),
-            "test": int(os.environ.get("DAPTA_MIN_TEST_EXAMPLES", "4")),
-            "ood": int(os.environ.get("DAPTA_MIN_OOD_EXAMPLES", "2")),
-        }
+        policy = self._policy_for(job)
+        minimums = policy.minimums
         errors: list[str] = []
         counts: dict[str, int] = {}
         seen_inputs: dict[str, str] = {}
@@ -131,6 +138,11 @@ class AgentDatasetSource:
                         f"input leakage across {seen_inputs[input_fingerprint]} and {split}[{index}]"
                     )
                 seen_inputs[input_fingerprint] = f"{split}[{index}]"
+        if policy.maximum_total is not None and sum(counts.values()) > policy.maximum_total:
+            errors.append(
+                f"dataset has {sum(counts.values())} cases; maximum is "
+                f"{policy.maximum_total}"
+            )
         return {
             "passed": not errors,
             "round": round,
@@ -139,6 +151,12 @@ class AgentDatasetSource:
             "frozen_test_sha256": split_hashes.get("test"),
             "errors": errors[:100],
         }
+
+    def _policy_for(self, job: Mapping[str, Any]) -> DatasetPolicy:
+        limits = job.get("training_limits")
+        if isinstance(limits, Mapping) and limits.get("profile") == SMOKE_PROFILE:
+            return smoke_dataset_policy()
+        return self.policy
 
 
 class DevinIntegrator:
@@ -324,7 +342,12 @@ class RunPodTrainingBackend:
             "max_length": int(os.environ.get("DAPTA_FACTORY_MAX_LENGTH", "4096")),
             "max_train_examples": int(os.environ.get("DAPTA_FACTORY_MAX_TRAIN_EXAMPLES", "64")),
             "max_test_examples": int(os.environ.get("DAPTA_FACTORY_MAX_TEST_EXAMPLES", "12")),
+            "max_steps": int(os.environ.get("DAPTA_FACTORY_MAX_STEPS", "-1")),
+            "max_training_seconds": float(
+                os.environ.get("DAPTA_FACTORY_MAX_TRAIN_SECONDS", "0")
+            ),
         }
+        apply_smoke_training_limits(bundle, job.get("training_limits") if isinstance(job, Mapping) else None)
         for name in ("skill_spec", "output_schema", "evaluation_plan"):
             bundle["skill_contract"][name] = self._artifact(job_id, name)
         bundle_path = run_dir / "bundle.json"

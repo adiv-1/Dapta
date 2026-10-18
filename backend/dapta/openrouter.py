@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Callable, Mapping, Protocol
 
+from .factory_limits import DatasetPolicy
 from .ledger import UsageLedger, openrouter_usage
 from .observability import ai_agent, ai_chat, log_event, mark_failed, record_ai_usage
 
@@ -236,11 +237,14 @@ class FactoryAgents:
         critic_model: str,
     ):
         self.client = client
+        dataset_policy = DatasetPolicy.from_env()
         self.skill_architect = AgentDefinition(
             name="skill_architect",
             model=factory_model,
             stage="skill_architect",
-            max_tokens=12000,
+            max_tokens=_optional_positive_int(
+                os.environ.get("OPENROUTER_SKILL_ARCHITECT_MAX_TOKENS"), 12000
+            ),
             system_prompt=(
                 "You are Dapta's Skill Architect. Convert a stable repetitive workflow into "
                 "a strict JSON contract. Return exactly three top-level objects: skill_spec, "
@@ -255,12 +259,16 @@ class FactoryAgents:
             name="data_builder",
             model=factory_model,
             stage="data_builder",
-            max_tokens=None,
+            max_tokens=_optional_positive_int(
+                os.environ.get("OPENROUTER_DATA_BUILDER_MAX_TOKENS"), None
+            ),
             system_prompt=(
                 "You are Dapta's Data Builder. Follow the approved skill contract exactly. "
                 "Return four top-level arrays: train, dev, test, and ood. Every item must be "
                 "{id, input, output}; input is the complete user material and output conforms to "
-                "output_schema. Return at least 16 train, 4 dev, 4 test, and 2 OOD examples. "
+                "output_schema. "
+                + dataset_policy.generation_instruction()
+                + " "
                 "Keep every case traceable to deterministic truth or a cited public source. "
                 "Never inspect model outputs, approve TEST, or alter evaluation rules. On repair "
                 "rounds, use only supplied DEV feedback and never change frozen TEST."
@@ -270,7 +278,9 @@ class FactoryAgents:
             name="independent_evaluator",
             model=critic_model,
             stage="model_evaluate",
-            max_tokens=4000,
+            max_tokens=_optional_positive_int(
+                os.environ.get("OPENROUTER_EVALUATOR_MAX_TOKENS"), 4000
+            ),
             system_prompt=(
                 "You are Dapta's Independent Evaluator. Review only qualities that deterministic "
                 "code cannot score. Return strict JSON with qualitative_findings and failures. "
@@ -305,6 +315,7 @@ class FactoryAgents:
         workflow: str,
         skill_contract: Mapping[str, Any],
         feedback: Mapping[str, Any] | None = None,
+        dataset_instruction: str | None = None,
     ) -> Mapping[str, Any]:
         return self._run(
             self.data_builder,
@@ -314,6 +325,7 @@ class FactoryAgents:
                 "skill_contract": dict(skill_contract),
                 "dev_feedback": dict(feedback or {}),
             },
+            dataset_instruction=dataset_instruction,
         )
 
     def evaluate(
@@ -326,11 +338,21 @@ class FactoryAgents:
         )
 
     def _run(
-        self, definition: AgentDefinition, *, run_id: str, payload: Mapping[str, Any]
+        self,
+        definition: AgentDefinition,
+        *,
+        run_id: str,
+        payload: Mapping[str, Any],
+        dataset_instruction: str | None = None,
     ) -> dict[str, Any]:
         reasoning_effort = None
         if definition.name == "data_builder":
             reasoning_effort = os.environ.get("OPENROUTER_DATA_BUILDER_REASONING_EFFORT")
+        system_prompt = definition.system_prompt
+        if dataset_instruction:
+            system_prompt = (
+                f"{system_prompt}\n\nSmoke dataset cap: {dataset_instruction}"
+            )
         with ai_agent(definition.name, system="openrouter", model=definition.model, **{
             "dapta.run_id": run_id, "dapta.stage": definition.stage,
         }):
@@ -340,7 +362,7 @@ class FactoryAgents:
                 agent_role=definition.name,
                 model=definition.model,
                 messages=[
-                    {"role": "system", "content": definition.system_prompt},
+                    {"role": "system", "content": system_prompt},
                     {
                         "role": "user",
                         "content": json.dumps(payload, separators=(",", ":"), ensure_ascii=False),
@@ -388,6 +410,18 @@ def _response_json(response: Mapping[str, Any]) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise OpenRouterError("OpenRouter agent response must be a JSON object")
     return value
+
+
+def _optional_positive_int(value: str | None, default: int | None) -> int | None:
+    if value in {None, ""}:
+        return default
+    try:
+        parsed = int(value)
+    except ValueError as error:
+        raise ValueError("OpenRouter token limits must be positive integers") from error
+    if parsed < 1:
+        raise ValueError("OpenRouter token limits must be positive integers")
+    return parsed
 
 
 def _content_text(content: Any) -> str:

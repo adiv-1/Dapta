@@ -66,6 +66,47 @@ class ApiTests(unittest.TestCase):
                     {"list_adapters", "run_comparison", "create_adapter", "get_job_status"},
                 )
 
+    def test_agent_training_requires_the_access_file_and_stays_small(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            database = root / "dapta.sqlite3"
+            access = root / "access.json"
+            environment = {
+                "DAPTA_LEDGER_PATH": str(database),
+                "DAPTA_CONTROL_TOKEN": "controller-test-token",
+                "DAPTA_FACTORY_AUTOSTART": "false",
+                "DAPTA_TRAINING_ACCESS_PATH": str(access),
+            }
+            with patch.dict(os.environ, environment, clear=False):
+                from dapta.api import create_app
+                from dapta.jobs import JobStore
+
+                client = TestClient(create_app(database))
+                headers = {"X-Dapta-Token": "controller-test-token"}
+                body = {
+                    "idempotency_key": "smoke-access-001",
+                    "arguments": {
+                        "workflow": "Classify synthetic receipts into expense categories.",
+                        "idempotency_key": "smoke-access-001",
+                    },
+                }
+                closed = client.post("/v1/agent/tools/create_adapter", headers=headers, json=body)
+                self.assertEqual(closed.status_code, 403)
+                operator = client.post(
+                    "/jobs",
+                    headers={"Idempotency-Key": "operator-job-001"},
+                    json={"workflow": "Turn receipt images into a structured expense report."},
+                )
+                self.assertEqual(operator.status_code, 202)
+
+                access.write_text('{"enabled":true,"expires_at":9999999999}\n', encoding="utf-8")
+                opened = client.post("/v1/agent/tools/create_adapter", headers=headers, json=body)
+                self.assertEqual(opened.status_code, 200)
+                limits = JobStore(database).get_artifact(opened.json()["job_id"], "training_limits.json")
+                self.assertEqual(limits["profile"], "smoke")
+                self.assertEqual(limits["max_examples"], 10)
+                self.assertEqual(limits["max_train_seconds"], 120)
+
 
 if __name__ == "__main__":
     unittest.main()
