@@ -269,7 +269,12 @@ def evaluate_condition(
         text = processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
         inputs = processor(text=[text], return_tensors="pt", padding=True).to("cuda")
         started = time.perf_counter()
-        with torch.inference_mode():
+        # PEFT keeps LoRA projection weights in float32 for stable updates.
+        # Generation happens outside Trainer's mixed-precision context, so
+        # restore autocast here when bf16 Qwen activations reach those layers.
+        with torch.inference_mode(), torch.autocast(
+            device_type="cuda", dtype=torch.bfloat16
+        ):
             ids = model.generate(
                 **inputs,
                 max_new_tokens=int(os.environ.get("DAPTA_FACTORY_MAX_NEW_TOKENS", "768")),
