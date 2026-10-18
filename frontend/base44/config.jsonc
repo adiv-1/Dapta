@@ -1,6 +1,6 @@
 {
   "name": "Dapta",
-  "visibility": "private",
+  "visibility": "public",
   "site": {
     "installCommand": "npm install",
     "buildCommand": "npm run build",

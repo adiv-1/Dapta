@@ -14,7 +14,9 @@ build automatically invokes the deployed `dapta-proxy` function. Set only
 `VITE_DAPTA_API_URL` in production. Keep `BASE_44_API_KEY` out of all `VITE_*`
 variables.
 
-Invite-only access is enforced by Base44 before the proxy forwards a request.
+The website is publicly visible. The backend proxy still requires a signed-in
+Base44 user before forwarding any controller request; public visibility does
+not make model calls or saved controller data anonymously accessible.
 Sentry Replay masks all text and blocks document media by default. Browser tracing and routine
 Replay sessions default to 5% sampling, while error Replays remain at 100%; all three rates are
 configurable with the `VITE_SENTRY_*_SAMPLE_RATE` variables shown in `.env.example`.
