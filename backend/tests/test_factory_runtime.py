@@ -1,15 +1,24 @@
 import unittest
 
-from dapta.factory_runtime import AgentDatasetSource, SavedEvaluation, training_allocation_id
+from dapta.factory_runtime import (
+    AgentDatasetSource,
+    SavedEvaluation,
+    training_allocation_id,
+    training_instance_id,
+)
 
 
 class FactoryRuntimeTests(unittest.TestCase):
-    def test_training_retries_get_distinct_compute_allocations(self):
+    def test_training_retries_share_a_stable_job_round_allocation(self):
         first = training_allocation_id("job-1", 1)
         second = training_allocation_id("job-1", 1)
 
-        self.assertNotEqual(first, second)
-        self.assertTrue(first.startswith("runpod:job-1:round-1:attempt-"))
+        self.assertEqual(first, second)
+        self.assertEqual(first, "runpod:job-1:round-1:lease-v2")
+        self.assertEqual(
+            training_instance_id("pod-123", "job-1", 1),
+            "pod-123:job-job-1:round-1",
+        )
 
     def test_validator_rejects_input_leakage_and_schema_violations(self):
         source = AgentDatasetSource(agents=None)

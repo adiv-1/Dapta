@@ -9,7 +9,6 @@ import threading
 import time
 import urllib.error
 import urllib.request
-import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
 from pathlib import Path
@@ -27,8 +26,13 @@ from .observability import capture_exception, root_transaction, span
 
 
 def training_allocation_id(job_id: str, round: int) -> str:
-    """Return a unique billable allocation ID for each training attempt."""
-    return f"runpod:{job_id}:round-{round}:attempt-{uuid.uuid4().hex[:12]}"
+    """Return the stable logical GPU lease for one job and data round."""
+    return f"runpod:{job_id}:round-{round}:lease-v2"
+
+
+def training_instance_id(physical_instance_id: str, job_id: str, round: int) -> str:
+    """Scope a persistent RunPod pod to one billable adapter workload."""
+    return f"{physical_instance_id}:job-{job_id}:round-{round}"
 
 
 class AgentDatasetSource:
@@ -268,18 +272,24 @@ class RunPodTrainingBackend:
         bundle_path = run_dir / "bundle.json"
         bundle_path.write_text(json.dumps(bundle, ensure_ascii=False), encoding="utf-8")
         allocation_id = training_allocation_id(job_id, round)
+        physical_instance_id = os.environ.get("RUNPOD_POD_ID", "existing-pod")
         started = _now()
         self.ledger.register_compute(
             run_id=job_id,
             allocation_id=allocation_id,
             provider="runpod",
-            instance_id=os.environ.get("RUNPOD_POD_ID", "existing-pod"),
+            instance_id=training_instance_id(physical_instance_id, job_id, round),
             plan_id=os.environ.get("RUNPOD_GPU_PLAN", "RTX-A40-48GB"),
             region=os.environ.get("RUNPOD_REGION", "CA-MTL-1"),
             gpu_type=os.environ.get("RUNPOD_GPU_TYPE", "RTX A40"),
             gpu_count=1,
             hourly_cost_usd=self.hourly_cost,
             pricing_source="runpod_console",
+            registered_at=str(job["created_at"]),
+            metadata={
+                "provider_instance_id": physical_instance_id,
+                "billing_scope": "adapter_job_round",
+            },
         )
         self.ledger.record_compute_event(allocation_id=allocation_id, event_type="workload_started")
         training_clock = time.monotonic()
