@@ -73,7 +73,8 @@ if [[ "$QWEN_BACKEND" == "vllm" ]]; then
   # shellcheck disable=SC2206 -- operator-supplied extra flags
   [[ -n "${VLLM_EXTRA_ARGS:-}" ]] && vllm_args+=(${VLLM_EXTRA_ARGS})
   # Sleep/wake and runtime LoRA registration are dev endpoints: vLLM binds to loopback only.
-  VLLM_SERVER_DEV_MODE=1 VLLM_ALLOW_RUNTIME_LORA_UPDATING=True \
+  # The venv's bin comes first on PATH: FlashInfer JIT-builds kernels with the venv's `ninja`.
+  PATH="$(dirname "$VLLM_BIN"):$PATH" VLLM_SERVER_DEV_MODE=1 VLLM_ALLOW_RUNTIME_LORA_UPDATING=True \
     nohup "$VLLM_BIN" "${vllm_args[@]}" >"$LOG_DIR/vllm.log" 2>&1 &
   echo $! >"$PID_DIR/vllm.pid"
   # First start downloads/compiles; allow up to 15 minutes.
