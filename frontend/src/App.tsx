@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import * as Sentry from "@sentry/react";
 import {
   Activity, ArrowUp, BarChart3, BrainCircuit, Check, Clock3, Cpu,
@@ -11,11 +11,12 @@ import type { Adapter, Benchmark, Condition, Job, Run } from "./types";
 
 type Tab = "chat" | "performance" | "skills";
 type PerformanceView = "live" | "lift";
+type ActivityState = "idle" | "uploading" | "routing" | "comparing";
 
 const labels: Record<string, string> = {
   qwen_lora: "Qwen LoRA",
-  frontier_a: "Claude",
-  frontier_b: "GPT",
+  frontier_a: "Claude Opus 5.5",
+  frontier_b: "GPT-5.6 Sol",
 };
 
 function recordPoll(event: PollTelemetry) {
@@ -48,6 +49,7 @@ export default function App() {
   const [documentText, setDocumentText] = useState("");
   const [fileName, setFileName] = useState<string>();
   const [busy, setBusy] = useState(false);
+  const [activity, setActivity] = useState<ActivityState>("idle");
   const [error, setError] = useState<string>();
   const fileInput = useRef<HTMLInputElement>(null);
   const polls = useRef(new PollCoordinator());
@@ -110,6 +112,7 @@ export default function App() {
   async function onFile(file?: File) {
     if (!file) return;
     setBusy(true);
+    setActivity("uploading");
     setError(undefined);
     try {
       const extracted = await api.extract(file);
@@ -119,12 +122,15 @@ export default function App() {
       setError(reason instanceof Error ? reason.message : "Could not read the file");
     } finally {
       setBusy(false);
+      setActivity("idle");
     }
   }
 
   async function submit() {
     if (!prompt.trim()) return;
     setBusy(true);
+    setActivity("routing");
+    setSelectedRun(undefined);
     setError(undefined);
     try {
       const route = await api.route(prompt);
@@ -138,6 +144,7 @@ export default function App() {
         if (route.requires_confirmation && !window.confirm(
           `Use the matched adapter ${route.adapter_id}?\n\n${route.reason}`,
         )) return;
+        setActivity("comparing");
         const run = await api.compare(prompt, documentText, route.adapter_id, fileName);
         setRuns((current) => [run, ...current]);
         setSelectedRun(run.run_id);
@@ -151,13 +158,16 @@ export default function App() {
       setError(reason instanceof Error ? reason.message : "Request failed");
     } finally {
       setBusy(false);
+      setActivity("idle");
     }
   }
 
   return (
     <div className="app-shell">
       <header className="topbar">
-        <a className="brand" href="#"><span className="brand-mark">D</span>Dapta</a>
+        <a className="brand" href="#" aria-label="Dapta home">
+          <span className="brand-lockup"><img src="/dapta-chameleon.png" alt="" /><span className="brand-word">Dapta</span></span>
+        </a>
         <nav>
           <TabButton active={tab === "chat"} onClick={() => setTab("chat")}>Chat</TabButton>
           <TabButton active={tab === "performance"} onClick={() => setTab("performance")}>Performance</TabButton>
@@ -171,7 +181,7 @@ export default function App() {
         {tab === "chat" && (
           <Chat
             prompt={prompt} setPrompt={setPrompt} documentText={documentText}
-            setDocumentText={setDocumentText} fileName={fileName} busy={busy}
+            setDocumentText={setDocumentText} fileName={fileName} busy={busy} activity={activity}
             fileInput={fileInput} onFile={onFile} submit={submit} run={currentRun}
           />
         )}
@@ -210,41 +220,96 @@ export default function App() {
 function Chat(props: {
   prompt: string; setPrompt: (value: string) => void; documentText: string;
   setDocumentText: (value: string) => void; fileName?: string; busy: boolean;
+  activity: ActivityState;
   fileInput: React.RefObject<HTMLInputElement>; onFile: (file?: File) => void;
   submit: () => void; run?: Run;
 }) {
-  const compact = Boolean(props.run);
+  const compact = Boolean(props.run) || props.activity === "comparing";
+  const showingModels = Boolean(props.run) || ["routing", "comparing"].includes(props.activity);
   return (
     <section className={compact ? "chat-page compact" : "chat-page"}>
-      {!compact && <div className="hero"><span className="eyebrow"><Sparkles size={14} /> Skills become models</span><h1>Run the work.<br /><em>Measure the difference.</em></h1><p>Give the same document to a specialized open model and two frontier models. Dapta records every token, second, dollar, and result.</p></div>}
+      <div className="chat-intro"><span className="eyebrow"><Sparkles size={14} /> Model comparison</span><h1>One document. Three models. <em>Measured fairly.</em></h1><p>Watch the same task run through the LoRA specialist, Claude Opus 5.5, and GPT-5.6 Sol—then compare speed, tokens, dollars, and grounded accuracy.</p></div>
       <div className="composer">
-        <textarea value={props.prompt} onChange={(event) => props.setPrompt(event.target.value)} aria-label="Workflow" />
-        <textarea className="document-input" value={props.documentText} onChange={(event) => props.setDocumentText(event.target.value)} placeholder="Paste document text or upload a PDF…" aria-label="Document text" />
+        <label htmlFor="workflow">What should the models do?</label>
+        <textarea id="workflow" value={props.prompt} onChange={(event) => props.setPrompt(event.target.value)} aria-label="Workflow" />
+        <label htmlFor="document">Document</label>
+        <textarea id="document" className="document-input" value={props.documentText} onChange={(event) => props.setDocumentText(event.target.value)} placeholder="Paste document text or upload a PDF…" aria-label="Document text" />
         <div className="composer-row">
           <input ref={props.fileInput} type="file" accept=".pdf,.txt,.md,.json,.csv" hidden onChange={(event) => props.onFile(event.target.files?.[0])} />
           <button className="attach" onClick={() => props.fileInput.current?.click()}><Upload size={16} />{props.fileName || "Upload document"}</button>
-          <button className="run-button" disabled={props.busy || !props.prompt.trim()} onClick={props.submit}>{props.busy ? <Loader2 className="spin" size={18} /> : <ArrowUp size={18} />}Run comparison</button>
+          <button className="run-button" disabled={props.busy || !props.prompt.trim()} onClick={props.submit}>{props.busy ? <Loader2 className="spin" size={18} /> : <ArrowUp size={18} />}{activityLabel(props.activity)}</button>
         </div>
       </div>
-      {props.run && <ModelGrid run={props.run} />}
+      {showingModels && <ModelGrid run={props.run} preparing={props.activity === "routing"} running={props.activity === "comparing" || props.run?.status === "queued" || props.run?.status === "running"} />}
     </section>
   );
 }
 
-function ModelGrid({ run }: { run: Run }) {
-  const conditions = ["qwen_lora", "frontier_a", "frontier_b"];
-  return <div className="model-grid">{conditions.map((name) => <ModelCard key={name} name={name} condition={run.results[name]} running={run.status === "queued" || run.status === "running"} />)}</div>;
+function activityLabel(activity: ActivityState) {
+  if (activity === "uploading") return "Reading document…";
+  if (activity === "routing") return "Matching workflow…";
+  if (activity === "comparing") return "Models are working…";
+  return "Run comparison";
 }
 
-function ModelCard({ name, condition, running }: { name: string; condition?: Condition; running: boolean }) {
+function ModelGrid({ run, preparing, running }: { run?: Run; preparing: boolean; running: boolean }) {
+  const conditions = ["qwen_lora", "frontier_a", "frontier_b"];
+  const startedAt = useRef(Date.now());
+  useEffect(() => { if (preparing || running) startedAt.current = Date.now(); }, [preparing, running]);
+  const now = useLiveNow(preparing || running);
+  const elapsed = Math.max(0, Math.floor((now - startedAt.current) / 1000));
+  const phase = preparing ? "Matching the best adapter" : elapsed < 3 ? "Reading the skill and document" : elapsed < 8 ? "Generating a structured answer" : "Validating and measuring the result";
+  return <><ComparisonScoreboard run={run} running={preparing || running} /><div className="model-grid" aria-live="polite">{conditions.map((name) => <ModelCard key={name} name={name} condition={run?.results[name]} running={preparing || running} phase={phase} />)}</div></>;
+}
+
+const pendingModels: Record<string, string> = {
+  qwen_lora: "Qwen3-VL-8B + Dapta LoRA",
+  frontier_a: "anthropic/claude-opus-5.5",
+  frontier_b: "openai/gpt-5.6-sol",
+};
+
+function ModelCard({ name, condition, running, phase }: { name: string; condition?: Condition; running: boolean; phase: string }) {
   const metrics = condition?.metrics;
+  const completed = condition?.status === "completed";
+  const status = completed ? "completed" : condition?.status || (running ? "working" : "queued");
+  const totalTokens = Number(metrics?.input_tokens || 0) + Number(metrics?.output_tokens || 0);
   return (
     <article className="model-card">
-      <div className="model-head"><span className={`model-dot ${name}`} /><div><strong>{condition?.label || labels[name]}</strong><small>{condition?.model || "Waiting for model"}</small></div><span className="status">{condition?.status === "completed" ? <Check size={14} /> : <Loader2 className={running ? "spin" : ""} size={14} />}{condition?.status || (running ? "running" : "queued")}</span></div>
-      <pre>{condition ? JSON.stringify(condition.output, null, 2) : "Waiting for output…"}</pre>
-      <div className="model-stats"><span><Clock3 size={14} />{metrics?.latency_ms ? `${(metrics.latency_ms / 1000).toFixed(2)}s` : "—"}</span><span>{metrics?.input_tokens ?? 0} in</span><span>{metrics?.output_tokens ?? 0} out</span><span>${Number(metrics?.cost_usd || 0).toFixed(5)}</span></div>
+      <div className="model-head"><span className={`model-dot ${name}`} /><div><strong>{condition?.label || labels[name]}</strong><small>{condition?.model || pendingModels[name]}</small></div><span className={`status ${completed ? "complete" : ""}`}>{completed ? <Check size={14} /> : <Loader2 className={running ? "spin" : ""} size={14} />}{status}</span></div>
+      {condition ? <pre>{JSON.stringify(condition.output, null, 2)}</pre> : <div className="model-working"><div className="working-orbit"><Loader2 className="spin" /></div><strong>{phase}</strong><span>The result will appear here as soon as this model finishes.</span><div className="working-track"><span /></div></div>}
+      <div className="model-stats"><div><small>Speed</small><strong>{metrics?.latency_ms ? `${(metrics.latency_ms / 1000).toFixed(2)}s` : "—"}</strong></div><div><small>Total tokens</small><strong>{completed ? totalTokens.toLocaleString() : "—"}</strong><span>{completed ? `${metrics?.input_tokens ?? 0} in · ${metrics?.output_tokens ?? 0} out` : "Waiting for usage"}</span></div><div><small>Cost</small><strong>{completed ? `$${Number(metrics?.cost_usd || 0).toFixed(5)}` : "—"}</strong></div></div>
     </article>
   );
+}
+
+type ScoreMetric = { key: string; label: string; helper: string; value: (condition?: Condition) => number | null; format: (value: number) => string; detail?: (condition?: Condition) => string };
+
+function ComparisonScoreboard({ run, running }: { run?: Run; running: boolean }) {
+  const names = ["qwen_lora", "frontier_a", "frontier_b"];
+  const metrics: ScoreMetric[] = [
+    { key: "speed", label: "Speed", helper: "Lower is faster", value: (condition) => condition?.status === "completed" && condition.metrics.latency_ms != null ? condition.metrics.latency_ms / 1000 : null, format: (value) => `${value.toFixed(2)}s` },
+    { key: "tokens", label: "Total tokens", helper: "Input + output", value: (condition) => condition?.status === "completed" ? Number(condition.metrics.input_tokens || 0) + Number(condition.metrics.output_tokens || 0) : null, format: (value) => value.toLocaleString(), detail: (condition) => `${condition?.metrics.input_tokens ?? 0} in · ${condition?.metrics.output_tokens ?? 0} out` },
+    { key: "cost", label: "Cost", helper: "Lower is cheaper", value: (condition) => condition?.status === "completed" ? Number(condition.metrics.cost_usd || 0) : null, format: (value) => `$${value.toFixed(5)}` },
+  ];
+  const bestByMetric = new Map(metrics.map((metric) => {
+    const values = names.map((name) => metric.value(run?.results[name])).filter((value): value is number => value != null);
+    return [metric.key, values.length ? Math.min(...values) : null];
+  }));
+  const wins = new Map(names.map((name) => [name, metrics.filter((metric) => {
+    const value = metric.value(run?.results[name]);
+    const best = bestByMetric.get(metric.key);
+    return value != null && best != null && Math.abs(value - best) < 0.000001;
+  }).length]));
+  return <section className="comparison-scoreboard"><div className="scoreboard-heading"><div><span>Core comparison</span><h2>Speed, tokens, and cost—side by side.</h2></div><p>These are the three numbers Dapta is built to improve. Lower is better across every row.</p></div><div className="scoreboard-grid"><div className="scoreboard-corner">Metric</div>{names.map((name) => {
+    const condition = run?.results[name];
+    return <div className={`scoreboard-model ${name}`} key={name}><strong>{condition?.label || labels[name]}</strong><span>{running && !condition ? "Working…" : `${wins.get(name) || 0} of 3 wins`}</span></div>;
+  })}{metrics.map((metric) => <div className="scoreboard-row" key={metric.key}><div className="scoreboard-metric"><strong>{metric.label}</strong><span>{metric.helper}</span></div>{names.map((name) => {
+    const condition = run?.results[name];
+    const value = metric.value(condition);
+    const best = bestByMetric.get(metric.key);
+    const isBest = value != null && best != null && Math.abs(value - best) < 0.000001;
+    return <div className={`scoreboard-value ${isBest ? "best" : ""}`} key={name}>{value == null ? <><Loader2 className={running ? "spin" : ""} size={18} /><strong>—</strong></> : <><strong>{metric.format(value)}</strong>{isBest && <b>Best</b>}</>}{metric.detail && value != null && <span>{metric.detail(condition)}</span>}</div>;
+  })}</div>)}</div></section>;
 }
 
 function Performance(props: {
@@ -256,13 +321,14 @@ function Performance(props: {
   const conditions = props.view === "live" ? liveConditions(props.run) : benchmarkConditions(props.benchmark);
   return (
     <section className="page performance-page">
-      <div className="page-title"><span><Activity size={18} /> Evidence</span><h1>Performance over time</h1><p>Saved results only. Switching tests never calls another model.</p></div>
-      <div className="segmented"><button className={props.view === "live" ? "active" : ""} onClick={() => props.setView("live")}>Live comparison</button><button className={props.view === "lift" ? "active" : ""} onClick={() => props.setView("lift")}>Adapter lift</button></div>
+      <div className="page-title"><span><Activity size={18} /> Evidence</span><h1>Speed, cost, and accuracy</h1><p>Every result below is saved evidence. Reviewing a run never calls a model again.</p></div>
+      <div className="segmented"><button className={props.view === "live" ? "active" : ""} onClick={() => props.setView("live")}>Comparison runs</button><button className={props.view === "lift" ? "active" : ""} onClick={() => props.setView("lift")}>Training benchmarks</button></div>
       <div className="run-pills">
         {props.view === "live" ? props.runs.map((run) => <button className={props.selectedRun === run.run_id ? "active" : ""} onClick={() => props.setSelectedRun(run.run_id)} key={run.run_id}>{new Date(run.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}<small>{run.attachment_name || run.status}</small></button>) : props.benchmarks.map((item) => <button className={props.selectedBenchmark === item.benchmark_id ? "active" : ""} onClick={() => props.setSelectedBenchmark(item.benchmark_id)} key={item.benchmark_id}>{item.name}<small>{item.test_documents} frozen cases</small></button>)}
       </div>
-      {conditions.length ? <><Summary conditions={conditions} /><div className="chart-grid"><MetricChart title="Time" suffix="s" lower conditions={conditions} field="time" /><MetricChart title="Cost" suffix="$" lower conditions={conditions} field="cost" /><MetricChart title={props.view === "live" ? "Evaluator score" : "Accuracy"} suffix="%" conditions={conditions} field="accuracy" /></div></> : <EmptyState text="Run a comparison to populate performance." />}
+      {conditions.length ? <><Summary conditions={conditions} /><div className="chart-grid"><MetricChart title="Speed" suffix="s" lower conditions={conditions} field="time" /><MetricChart title="Cost" suffix="$" lower conditions={conditions} field="cost" /><MetricChart title="Grounded accuracy" suffix="%" conditions={conditions} field="accuracy" /></div></> : <EmptyState text="Run a comparison to populate performance." />}
       {props.view === "lift" && props.benchmark && <p className="fine-print">Frozen test SHA-256: <code>{props.benchmark.test_sha256}</code>. Accuracy is labeled field F1; schema validity and exact-form rate remain available in the saved benchmark.</p>}
+      {props.view === "live" && <RunHistoryTable runs={props.runs} selectedRun={props.selectedRun} setSelectedRun={props.setSelectedRun} />}
     </section>
   );
 }
@@ -270,8 +336,7 @@ function Performance(props: {
 type ChartCondition = { name: string; label: string; time: number; cost: number; accuracy: number };
 
 function Summary({ conditions }: { conditions: ChartCondition[] }) {
-  const fastest = minBy(conditions, "time"); const cheapest = minBy(conditions, "cost"); const accurate = maxBy(conditions, "accuracy");
-  return <div className="summary-strip"><div><small>Fastest</small><strong>{fastest.label}</strong></div><div><small>Lowest cost</small><strong>{cheapest.label}</strong></div><div><small>Most accurate</small><strong>{accurate.label}</strong></div></div>;
+  return <div className="summary-strip"><div><small>Fastest</small><strong>{winningLabel(conditions, "time", true)}</strong></div><div><small>Lowest cost</small><strong>{winningLabel(conditions, "cost", true)}</strong></div><div><small>Most accurate</small><strong>{winningLabel(conditions, "accuracy", false)}</strong></div></div>;
 }
 
 function MetricChart({ title, suffix, lower, conditions, field }: { title: string; suffix: string; lower?: boolean; conditions: ChartCondition[]; field: "time" | "cost" | "accuracy" }) {
@@ -279,16 +344,46 @@ function MetricChart({ title, suffix, lower, conditions, field }: { title: strin
   return <article className="chart"><div className="chart-head"><h3>{title}</h3><span>{lower ? "Lower is better" : "Higher is better"}</span></div>{conditions.map((item) => <div className="bar-row" key={item.name}><div><strong>{item.label}</strong><span>{field === "cost" ? "$" : ""}{formatMetric(item[field], field)}{field === "cost" ? "" : suffix}</span></div><div className="track"><span className={item.name} style={{ width: `${Math.max(3, item[field] / max * 100)}%` }} /></div></div>)}</article>;
 }
 
+function RunHistoryTable({ runs, selectedRun, setSelectedRun }: { runs: Run[]; selectedRun?: string; setSelectedRun: (id: string) => void }) {
+  const ordered = [...runs].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
+  return <section className="history-section"><div className="history-heading"><div><span>Previous completed runs</span><h2>Comparison history</h2></div><small>Most recent first</small></div>{ordered.length ? <div className="table-scroll"><table><thead><tr><th>Date &amp; time</th><th>Speed</th><th>Cost</th><th>Accuracy</th><th>Overall winner</th></tr></thead><tbody>{ordered.map((run) => {
+    const conditions = liveConditions(run);
+    const overall = overallWinner(conditions);
+    return <tr key={run.run_id} className={selectedRun === run.run_id ? "selected" : ""} onClick={() => setSelectedRun(run.run_id)}><td><strong>{new Date(run.created_at).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}</strong><span>{new Date(run.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span></td><td><strong>{winningLabel(conditions, "time", true)}</strong><span>{conditions.length ? `${Math.min(...conditions.map((item) => item.time)).toFixed(2)}s` : "—"}</span></td><td><strong>{winningLabel(conditions, "cost", true)}</strong><span>{conditions.length ? `$${Math.min(...conditions.map((item) => item.cost)).toFixed(5)}` : "—"}</span></td><td><strong>{winningLabel(conditions, "accuracy", false)}</strong><span>{conditions.length ? `${Math.max(...conditions.map((item) => item.accuracy)).toFixed(1)}%` : "—"}</span></td><td><span className="winner-pill">{overall}</span></td></tr>;
+  })}</tbody></table></div> : <EmptyState text="Completed comparisons will appear here." />}</section>;
+}
+
+function winningLabel(items: ChartCondition[], field: "time" | "cost" | "accuracy", lower: boolean) {
+  if (!items.length) return "—";
+  const best = lower ? Math.min(...items.map((item) => item[field])) : Math.max(...items.map((item) => item[field]));
+  const winners = items.filter((item) => Math.abs(item[field] - best) < 0.000001);
+  return winners.length === items.length && items.length > 1 ? "Equal" : winners.length > 1 ? `${winners.length}-way tie` : winners[0].label;
+}
+
+function overallWinner(items: ChartCondition[]) {
+  if (!items.length) return "Incomplete";
+  const points = new Map(items.map((item) => [item.label, 0]));
+  (["time", "cost", "accuracy"] as const).forEach((field) => {
+    const lower = field !== "accuracy";
+    const best = lower ? Math.min(...items.map((item) => item[field])) : Math.max(...items.map((item) => item[field]));
+    const winners = items.filter((item) => Math.abs(item[field] - best) < 0.000001);
+    winners.forEach((winner) => points.set(winner.label, (points.get(winner.label) || 0) + 1 / winners.length));
+  });
+  const high = Math.max(...points.values());
+  const winners = [...points.entries()].filter(([, score]) => Math.abs(score - high) < 0.000001).map(([label]) => label);
+  return winners.length > 1 ? "Equal" : winners[0];
+}
+
 const factoryStages = [
-  { key: "queued", label: "JEV Router", detail: "Adapter match and trainability", icon: Router },
-  { key: "architecting", label: "Kimi K3 — Skill Architect", detail: "Skill spec, schema, evaluation plan", icon: BrainCircuit },
-  { key: "integrating", label: "Devin — Skill Integration", detail: "SKILL.md, validator spec, tests, Hugging Face bundle", icon: PackageCheck },
-  { key: "building_dataset", label: "Kimi K3 — Data Builder", detail: "TRAIN, DEV, frozen TEST, OOD", icon: Database },
-  { key: "validating", label: "Dataset Validator", detail: "Schema, leakage, duplicates, hashes", icon: ShieldCheck },
-  { key: "awaiting_compute", label: "Compute Gate", detail: "Budget and GPU readiness", icon: Clock3 },
-  { key: "training", label: "RunPod A40 — QLoRA", detail: "Training, GPU telemetry, cost", icon: Cpu },
-  { key: "evaluating", label: "Independent Evaluator", detail: "Base vs Skill vs LoRA", icon: BarChart3 },
-  { key: "publishing", label: "Hugging Face Registry", detail: "Weights, metrics, manifest", icon: UploadCloud },
+  { key: "queued", label: "Router", poweredBy: "JEV", detail: "Adapter match and trainability", icon: Router },
+  { key: "architecting", label: "Skill architect", poweredBy: "Kimi K3", detail: "Skill spec, schema, evaluation plan", icon: BrainCircuit },
+  { key: "integrating", label: "Skill integration", poweredBy: "Devin", detail: "SKILL.md, validator spec, tests, Hugging Face bundle", icon: PackageCheck },
+  { key: "building_dataset", label: "Data builder", poweredBy: "Kimi K3", detail: "TRAIN, DEV, frozen TEST, OOD", icon: Database },
+  { key: "validating", label: "Dataset validator", poweredBy: "Dapta", detail: "Schema, leakage, duplicates, hashes", icon: ShieldCheck },
+  { key: "awaiting_compute", label: "Compute gate", poweredBy: "Dapta", detail: "Budget and GPU readiness", icon: Clock3 },
+  { key: "training", label: "QLoRA training", poweredBy: "RunPod A40", detail: "Training, GPU telemetry, cost", icon: Cpu },
+  { key: "evaluating", label: "Independent evaluator", poweredBy: "Dapta evals", detail: "Base vs Skill vs LoRA", icon: BarChart3 },
+  { key: "publishing", label: "Registry publish", poweredBy: "Hugging Face", detail: "Weights, metrics, manifest", icon: UploadCloud },
 ] as const;
 
 export function Registry({ adapters, jobs, selectedJob, setSelectedJob, onTest, onRetry }: {
@@ -343,6 +438,7 @@ function FactoryTimeline({ job, onRetry }: { job: Job; onRetry: (jobId: string) 
         <div><small>Devin usage</small><strong>{Number(job.devin_session?.acus_consumed || job.devin_session?.on_demand_usage || 0).toFixed(2)} ACUs</strong></div>
       </div>
       <div className="factory-progress"><span style={{ width: `${overall}%` }} /></div>
+      <SentryDecision job={job} />
       <div className="factory-workspace">
         <div className="pipeline">
           {factoryStages.map((stage) => {
@@ -368,7 +464,7 @@ function FactoryTimeline({ job, onRetry }: { job: Job; onRetry: (jobId: string) 
             const timing = stageTiming(job, stage.key, now);
             const stageCost = costForStage(job, stage.key);
             const result = stageResult(job, stage.key);
-            return <div className={`pipeline-step ${completed ? "complete" : active ? "active" : failed ? "failed" : "pending"}`} key={stage.key}><div className="pipeline-icon">{completed ? <Check /> : failed ? <X /> : active ? <Loader2 className="spin" /> : <Icon />}</div><div><strong>{stage.label}</strong><span>{stage.detail}</span><div className="stage-metrics"><span>{timing == null ? "Not started" : formatDuration(timing)}</span><span>${stageCost.toFixed(4)}</span>{active && eta != null && <span>ETA ~{formatDuration(eta)}</span>}</div>{result && <small className="stage-result">Result: {result}</small>}{stage.key === "queued" && job.route && <small>{job.route.decision} · {Math.round(Number(job.route.confidence || 0) * 100)}% · {job.route.reason}</small>}{stage.key === "integrating" && job.devin_session && <small>{devinLabel}{job.devin_session.pull_request_url ? " · PR ready" : ""}</small>}{stage.key === "validating" && job.validation && <small>Frozen TEST: {String(job.validation.frozen_test_sha256 || "pending").slice(0, 14)}…</small>}{stage.key === "training" && (active || completed) && progress && <TrainingTelemetry progress={progress} />}{stage.key === "publishing" && job.publish_result && <a href={job.publish_result.artifact_uri.replace("hf://", "https://huggingface.co/")} target="_blank" rel="noreferrer">Open adapter ↗</a>}</div></div>;
+            return <div className={`pipeline-step ${completed ? "complete" : active ? "active" : failed ? "failed" : "pending"}`} key={stage.key}><div className="pipeline-icon">{completed ? <Check /> : failed ? <X /> : active ? <Loader2 className="spin" /> : <Icon />}</div><div><div className="stage-title"><strong>{stage.label}</strong><span className="model-pill">{stage.poweredBy}</span></div><span>{stage.detail}</span><div className="stage-metrics"><span>{timing == null ? "Not started" : formatDuration(timing)}</span><span>${stageCost.toFixed(4)}</span><span className="sentry-trace"><i />Sentry traced</span>{active && eta != null && <span>ETA ~{formatDuration(eta)}</span>}</div>{result && <small className="stage-result">Result: {result}</small>}{stage.key === "queued" && job.route && <small>{job.route.decision} · {Math.round(Number(job.route.confidence || 0) * 100)}% · {job.route.reason}</small>}{stage.key === "integrating" && job.devin_session && <small>{devinLabel}{job.devin_session.pull_request_url ? " · PR ready" : ""}</small>}{stage.key === "validating" && job.validation && <small>Frozen TEST: {String(job.validation.frozen_test_sha256 || "pending").slice(0, 14)}…</small>}{stage.key === "training" && (active || completed) && progress && <TrainingTelemetry progress={progress} />}{stage.key === "publishing" && job.publish_result && <a href={job.publish_result.artifact_uri.replace("hf://", "https://huggingface.co/")} target="_blank" rel="noreferrer">Open adapter ↗</a>}</div></div>;
           })}
         </div>
         <AgentOutputPanel job={job} />
@@ -377,6 +473,32 @@ function FactoryTimeline({ job, onRetry }: { job: Job; onRetry: (jobId: string) 
       {job.deterministic_evaluation?.conditions && <FactoryResults evaluation={job.deterministic_evaluation} />}
     </article>
   );
+}
+
+function SentryDecision({ job }: { job: Job }) {
+  const evaluation = job.deterministic_evaluation;
+  const suggestions = repairSuggestions(job);
+  let decision = "Decision pending";
+  let explanation = "Sentry is tracing every factory stage, model call, latency, token, and cost signal. Retraining is decided only after the frozen evaluation finishes.";
+  let tone = "pending";
+  if (evaluation?.evaluation_verified === false || evaluation?.benchmark_status === "needs_repair") {
+    decision = "Do not retrain";
+    explanation = "The adapter weights completed successfully. Sentry and the evaluator identify truncated benchmark output, so Dapta reruns evaluation with a larger output budget instead of paying to retrain.";
+    tone = "repair";
+  } else if (evaluation?.passed) {
+    decision = "No retraining needed";
+    explanation = "The frozen benchmark passed and Sentry shows the completed inference path. The adapter is ready to publish without another training cycle.";
+    tone = "healthy";
+  } else if (evaluation && !evaluation.passed) {
+    decision = "Apply feedback, then retrain";
+    explanation = suggestions[0] || "Quality missed the frozen acceptance threshold. Dapta uses evaluator feedback on DEV data, records the repair in Sentry, and starts a new training round without touching frozen TEST.";
+    tone = "retrain";
+  } else if (job.status === "failed") {
+    decision = "Fix the failed stage first";
+    explanation = `${job.failure_code || "Factory failure"} is an operational failure captured by Sentry. Repair or retry that stage before deciding whether the model itself needs retraining.`;
+    tone = "retrain";
+  }
+  return <section className={`sentry-decision ${tone}`}><div className="sentry-heading"><div><ShieldCheck size={17} /><span>Sentry feedback → retraining decision</span></div><strong>{decision}</strong></div><p>{explanation}</p><div className="sentry-signals"><span><i />Errors {job.failure_code ? `· ${job.failure_code}` : "· clear"}</span><span><i />Traces · stage linked</span><span><i />AI telemetry · tokens + cost</span></div></section>;
 }
 
 const attemptStage: Record<string, string> = {
@@ -524,7 +646,5 @@ function TabButton({ active, children, onClick }: { active: boolean; children: R
 function EmptyState({ text }: { text: string }) { return <div className="empty"><Sparkles /><p>{text}</p></div>; }
 function liveConditions(run?: Run): ChartCondition[] { return run ? Object.entries(run.results).filter(([, value]) => value.status === "completed").map(([name, value]) => ({ name, label: value.label || labels[name] || name, time: (value.metrics.latency_ms || 0) / 1000, cost: Number(value.metrics.cost_usd || 0), accuracy: value.metrics.accuracy || 0 })) : []; }
 function benchmarkConditions(benchmark?: Benchmark): ChartCondition[] { return benchmark ? Object.entries(benchmark.conditions).map(([name, value]) => ({ name, label: String(value.label), time: Number(value.latency_seconds || 0), cost: Number(value.cost_usd || 0), accuracy: Number(value.accuracy || 0) })) : []; }
-function minBy(items: ChartCondition[], field: "time" | "cost") { return items.reduce((best, item) => item[field] < best[field] ? item : best); }
-function maxBy(items: ChartCondition[], field: "accuracy") { return items.reduce((best, item) => item[field] > best[field] ? item : best); }
 function formatMetric(value: number, field: string) { return field === "cost" ? value.toFixed(5) : field === "time" ? value.toFixed(2) : value.toFixed(1); }
 function stageLabel(stage: string) { return stage.split("_").map((word) => word[0]?.toUpperCase() + word.slice(1)).join(" "); }

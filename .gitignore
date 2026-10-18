@@ -79,6 +79,7 @@ target/
 
 # Jupyter Notebook
 .ipynb_checkpoints
+*.ipynb
 
 # IPython
 profile_default/
@@ -166,6 +167,9 @@ ENV/
 env.bak/
 venv.bak/
 !.env.example
+
+# Local agent/editor context
+.cursor/
 
 # Dapta generated artifacts
 artifacts/

@@ -29,10 +29,10 @@ class Settings:
             qwen_api_token=os.environ.get("DAPTA_QWEN_TOKEN") or None,
             qwen_model=os.environ.get("QWEN_BASE_MODEL", "Qwen/Qwen3-VL-8B-Instruct"),
             frontier_model_a=os.environ.get(
-                "OPENROUTER_FRONTIER_MODEL_A", "anthropic/claude-opus-4.1"
+                "OPENROUTER_FRONTIER_MODEL_A", "anthropic/claude-opus-5.5"
             ),
             frontier_model_b=os.environ.get(
-                "OPENROUTER_FRONTIER_MODEL_B", "openai/gpt-5"
+                "OPENROUTER_FRONTIER_MODEL_B", "openai/gpt-5.6-sol"
             ),
             frontier_reasoning_a=os.environ.get("OPENROUTER_FRONTIER_REASONING_A") or None,
             frontier_reasoning_b=os.environ.get("OPENROUTER_FRONTIER_REASONING_B") or None,
