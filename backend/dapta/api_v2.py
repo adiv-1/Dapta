@@ -161,7 +161,13 @@ def create_app(database_path: Path | str | None = None) -> FastAPI:
         if len(contents) > 10 * 1024 * 1024:
             raise HTTPException(status_code=413, detail="file exceeds 10 MB")
         try:
-            text = _extract_text(contents, Path(file.filename or "document.txt").suffix.lower())
+            suffix = Path(file.filename or "document.txt").suffix.lower()
+            with span("document.preprocess", "Extract document text", **{
+                "dapta.document.bytes": len(contents), "dapta.document.extension": suffix,
+            }) as extraction:
+                text = _extract_text(contents, suffix)
+                if extraction is not None:
+                    extraction.set_data("dapta.document.output_chars", len(text))
         except ValueError as error:
             raise HTTPException(status_code=422, detail=str(error)) from error
         return {"filename": file.filename, "text": text, "sha256": hashlib.sha256(contents).hexdigest()}

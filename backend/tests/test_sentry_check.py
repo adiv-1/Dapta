@@ -59,6 +59,7 @@ class FakeSentry:
 
     def close(self):
         self.server.shutdown()
+        self.server.server_close()
 
 
 def unused_port():

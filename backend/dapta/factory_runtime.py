@@ -22,7 +22,10 @@ from .jobs import (
     JobStore,
 )
 from .ledger import UsageLedger
-from .observability import capture_exception, root_transaction, span
+from .observability import (
+    ai_agent, capture_exception, current_factory_stage, error_category, log_event, mark_failed,
+    root_transaction, span,
+)
 
 
 def training_allocation_id(job_id: str, round: int) -> str:
@@ -145,21 +148,44 @@ class DevinIntegrator:
         self, *, job: Mapping[str, Any], skill_contract: Mapping[str, Any]
     ) -> Mapping[str, Any]:
         job_id = str(job["job_id"])
+        started = time.monotonic()
+        polls = 0
+        stage = current_factory_stage()
         try:
             saved = self.store.get_artifact(job_id, "devin_session.json")
             session_id = saved["session_id"]
         except Exception:
-            with span("agent.devin.integrate", "Create Devin integration", **{"dapta.job_id": job_id}):
-                created = self.client.create_integration_session(
-                    job_id=job_id,
-                    workflow=str(job["workflow"]),
-                    skill_contract=skill_contract,
-                )
+            with ai_agent("devin_skill_integrator", system="devin", model="devin", **{
+                "dapta.job_id": job_id, "dapta.retry_count": 0,
+            }) as telemetry:
+                try:
+                    created = self.client.create_integration_session(
+                        job_id=job_id,
+                        workflow=str(job["workflow"]),
+                        skill_contract=skill_contract,
+                    )
+                except Exception as error:
+                    mark_failed(telemetry, error, retry_count=0)
+                    raise
+                if telemetry is not None:
+                    telemetry.set_data("dapta.devin.status", created.status)
             session_id = created.session_id
             self.store.set_artifact(job_id, "devin_session.json", created.__dict__)
+            log_event("devin_session_started", job_id=job_id, session_id=session_id, status=created.status)
+        if stage is not None:
+            stage.suspend("devin_session")
         deadline = time.monotonic() + self.timeout_seconds
         while time.monotonic() < deadline:
-            session = self.client.get_session(session_id)
+            polls += 1
+            try:
+                session = self.client.get_session(session_id)
+            except Exception as error:
+                if stage is not None:
+                    stage.resume("devin_failed")
+                log_event("devin_session_failed", level="error", job_id=job_id, session_id=session_id,
+                          retry_count=max(0, polls - 1), duration_ms=round((time.monotonic() - started) * 1000),
+                          error_type=type(error).__name__, error_category=error_category(error))
+                raise
             self.store.set_artifact(job_id, "devin_session.json", session.__dict__)
             self.store.record_progress(job_id, {
                 "stage": "integrating",
@@ -167,12 +193,27 @@ class DevinIntegrator:
             })
             normalized = session.status.lower()
             if normalized in {"finished", "completed", "done"}:
+                if stage is not None:
+                    stage.resume("devin_completed")
+                    if stage.active is not None:
+                        stage.active.set_data("dapta.devin.status", session.status)
+                        stage.active.set_data("dapta.devin.poll_count", polls)
+                        if session.acus_consumed is not None:
+                            stage.active.set_data("dapta.devin.acus_consumed", session.acus_consumed)
+                log_event("devin_session_completed", job_id=job_id, session_id=session_id,
+                          status=session.status, retry_count=max(0, polls - 1),
+                          duration_ms=round((time.monotonic() - started) * 1000))
                 return {
                     **session.__dict__,
                     "evidence_type": "huggingface_skill_bundle",
                     "repository_write_required": False,
                 }
             if (session.status_detail or "").lower() in {"waiting_for_user", "inactivity"}:
+                if stage is not None:
+                    stage.resume("devin_evidence_ready")
+                log_event("devin_session_completed", job_id=job_id, session_id=session_id,
+                          status=session.status_detail, retry_count=max(0, polls - 1),
+                          duration_ms=round((time.monotonic() - started) * 1000))
                 return {
                     **session.__dict__,
                     "evidence_type": "huggingface_skill_bundle",
@@ -180,9 +221,22 @@ class DevinIntegrator:
                     "note": "Devin preserved its scoped integration evidence; no GitHub action is required.",
                 }
             if normalized in {"failed", "error", "cancelled", "stopped"}:
-                raise DevinError(f"Devin session ended with status {session.status}")
+                if stage is not None:
+                    stage.resume("devin_failed")
+                error = DevinError(f"Devin session ended with status {session.status}")
+                log_event("devin_session_failed", level="error", job_id=job_id, session_id=session_id,
+                          status=session.status, retry_count=max(0, polls - 1),
+                          duration_ms=round((time.monotonic() - started) * 1000),
+                          error_category=error_category(error))
+                raise error
             time.sleep(self.poll_seconds)
-        raise DevinError("Devin integration timed out before producing tested evidence")
+        if stage is not None:
+            stage.resume("devin_timeout")
+        error = DevinError("Devin integration timed out before producing tested evidence")
+        log_event("devin_session_failed", level="error", job_id=job_id, session_id=session_id,
+                  retry_count=max(0, polls - 1), duration_ms=round((time.monotonic() - started) * 1000),
+                  error_category=error_category(error))
+        raise error
 
 
 class QwenLifecycle:
@@ -338,6 +392,9 @@ class RunPodTrainingBackend:
                 bufsize=1,
                 env={**os.environ, "PYTHONUNBUFFERED": "1"},
             )
+            stage = current_factory_stage()
+            if stage is not None:
+                stage.suspend("gpu_training")
             timed_out = threading.Event()
 
             def stop_over_budget() -> None:
@@ -379,6 +436,9 @@ class RunPodTrainingBackend:
                 raise RuntimeError("GPU worker did not write result.json")
             return json.loads(result_path.read_text(encoding="utf-8"))
         finally:
+            stage = current_factory_stage()
+            if stage is not None:
+                stage.resume("gpu_worker_result")
             on_progress({"stage": "training", "message": "Reloading inference model"})
             self.lifecycle.load()
 

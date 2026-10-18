@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "test": "node --test --import ./tests/register.mjs tests/tracing.test.ts tests/proxy.test.ts tests/sdk-propagation.test.ts"
+    "test": "node --test --import ./tests/register.mjs tests/tracing.test.ts tests/proxy.test.ts tests/sdk-propagation.test.ts tests/polling.test.ts tests/factory-render.test.ts"
   },
   "dependencies": {
     "@base44/sdk": "^0.8.40",

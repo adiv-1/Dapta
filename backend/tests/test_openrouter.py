@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 
 from dapta.ledger import UsageLedger
+from dapta.observability import error_category
 from dapta.openrouter import FactoryAgents, OpenRouterClient, OpenRouterError, _response_json
 
 
@@ -124,6 +125,25 @@ class OpenRouterTests(unittest.TestCase):
         self.assertEqual(status, "failed")
         self.assertNotIn("private workflow", metadata)
         self.assertEqual(self.ledger.run_summary("job-1")["model_cost_usd"], "0")
+
+    def test_openrouter_http_failures_have_provider_specific_categories(self):
+        expected = {
+            400: "bad_request",
+            401: "auth",
+            402: "insufficient_credits",
+            403: "content_policy",
+            408: "timeout",
+            429: "rate_limited",
+            502: "provider_unavailable",
+            503: "provider_unavailable",
+        }
+        for status, category in expected.items():
+            with self.subTest(status=status):
+                self.assertEqual(error_category(OpenRouterError("provider detail", status=status)), category)
+
+    def test_openrouter_errors_have_content_free_sentry_messages(self):
+        error = OpenRouterError("provider echoed private request content", status=400)
+        self.assertEqual(error.dapta_sentry_message, "OpenRouter request failed with HTTP 400")
 
     def test_structured_text_content_is_parsed(self):
         result = _response_json({

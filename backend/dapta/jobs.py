@@ -884,8 +884,13 @@ class AdapterJobOrchestrator:
             log_event("stage_started", **telemetry.fields)
             started = time.monotonic()
             try:
-                with span(operation, stage.replace("_", " ").title(), job_id=job_id, round=round):
+                if stage in {"skill_integration", "adapter_training"}:
+                    # These operations wait on external work. Their implementations suspend the
+                    # stage transaction while idle and resume it for the result.
                     next_status = work()
+                else:
+                    with span(operation, stage.replace("_", " ").title(), job_id=job_id, round=round):
+                        next_status = work()
                 with span("db.sql.transaction", "complete stage", **telemetry.fields):
                     self.store.complete_stage(
                         job_id, stage, status="completed", round=round, next_status=next_status,

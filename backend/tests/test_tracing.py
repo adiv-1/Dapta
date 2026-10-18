@@ -86,6 +86,7 @@ class QwenStub:
 
     def close(self):
         self.server.shutdown()
+        self.server.server_close()
 
 
 class HelperTests(unittest.TestCase):
@@ -105,6 +106,24 @@ class HelperTests(unittest.TestCase):
         sentry_sdk.flush()
         [event] = transport.items("event")
         self.assertEqual(event["tags"]["dapta.service"], "qwen-worker")
+
+    def test_representative_cpu_workload_emits_an_interpretable_profile(self):
+        transport = CaptureTransport()
+        sentry_sdk.get_global_scope().set_client(None)
+        observability.initialize_sentry(
+            dsn=DSN, transport=transport, traces_sample_rate=1.0, profiles_sample_rate=1.0,
+        )
+        with sentry_sdk.start_transaction(op="dapta.profile", name="JSON response construction"):
+            deadline = time.perf_counter() + 0.25
+            while time.perf_counter() < deadline:
+                json.dumps({"runs": [{"id": index, "status": "completed"} for index in range(500)]})
+        sentry_sdk.flush()
+
+        [profile] = [item for envelope in transport.envelopes for item in envelope.items
+                     if item.type == "profile"]
+        payload = profile.payload.json["profile"]
+        self.assertGreater(len(payload["samples"]), 0)
+        self.assertGreater(len(payload["frames"]), 0)
 
     def test_continued_transaction_keeps_the_trace_in_another_thread(self):
         transport = start_sentry()
@@ -127,6 +146,66 @@ class HelperTests(unittest.TestCase):
         self.assertEqual(background_tx["contexts"]["trace"]["parent_span_id"], request_tx["contexts"]["trace"]["span_id"])
         [child] = background_tx["spans"]
         self.assertEqual(self.child_headers["sentry-trace"].split("-")[:2], [TRACE_ID, child["span_id"]])
+
+    def test_factory_waits_are_separate_transactions_in_one_job_trace(self):
+        transport = start_sentry()
+        job_id = "job-segment-test"
+        observability.emit_job_root(job_id, skill_id="synthetic")
+        with observability.FactoryStage(
+            job_id, "skill_integration", round=1, op="dapta.factory.stage",
+            name="factory skill_integration",
+        ) as stage:
+            with observability.span("agent.devin.integrate", "Create Devin integration"):
+                pass
+            stage.suspend("devin_session")
+            stage.resume("devin_completed")
+            with observability.span("db.sql.transaction", "complete stage"):
+                pass
+        sentry_sdk.flush()
+
+        transactions = transport.items("transaction")
+        root = next(item for item in transactions if item["transaction"] == "factory job")
+        segments = [item for item in transactions if item["transaction"].startswith("factory skill_integration")]
+        self.assertEqual(len(segments), 2)
+        self.assertEqual({item["contexts"]["trace"]["trace_id"] for item in segments},
+                         {root["contexts"]["trace"]["trace_id"]})
+        self.assertTrue(all(item["contexts"]["trace"]["parent_span_id"]
+                            == root["contexts"]["trace"]["span_id"] for item in segments))
+
+    def test_openrouter_agent_and_call_spans_include_reported_usage(self):
+        from dapta.ledger import UsageLedger
+        from dapta.openrouter import FactoryAgents, OpenRouterClient
+
+        class Transport:
+            def request(self, method, url, *, headers, payload=None):
+                del method, url, headers, payload
+                return {
+                    "id": None,
+                    "model": "moonshotai/kimi-k3",
+                    "choices": [{"message": {"content": '{"result":"ok"}'}}],
+                    "usage": {"prompt_tokens": 10, "completion_tokens": 5,
+                              "total_tokens": 15, "cost": "0.001"},
+                }
+
+        transport = start_sentry()
+        with tempfile.TemporaryDirectory() as temp:
+            ledger = UsageLedger(Path(temp) / "ledger.sqlite3")
+            ledger.create_run(run_id="job-ai", run_type="adapter_build", job_id="job-ai",
+                              started_at="2026-10-18T00:00:00Z")
+            client = OpenRouterClient(api_key="test", ledger=ledger, transport=Transport())
+            agents = FactoryAgents(client, factory_model="moonshotai/kimi-k3", critic_model="critic")
+            with sentry_sdk.start_transaction(op="test", name="factory AI test"):
+                agents.architect(run_id="job-ai", workflow="synthetic")
+        sentry_sdk.flush()
+
+        transaction = next(item for item in transport.items("transaction")
+                           if item["transaction"] == "factory AI test")
+        agent = next(item for item in transaction["spans"] if item["op"] == "gen_ai.invoke_agent")
+        call = next(item for item in transaction["spans"] if item["op"] == "gen_ai.chat")
+        self.assertEqual(call["parent_span_id"], agent["span_id"])
+        self.assertEqual(call["data"]["gen_ai.usage.input_tokens"], 10)
+        self.assertEqual(call["data"]["gen_ai.usage.output_tokens"], 5)
+        self.assertEqual(call["data"]["dapta.cost_usd"], 0.001)
 
 
 class ComparisonTracingTests(unittest.TestCase):
@@ -172,10 +251,12 @@ class ComparisonTracingTests(unittest.TestCase):
         request_tx, comparison_tx = transactions["POST /v1/comparisons"], transactions["Dapta model comparison"]
         self.assertEqual(comparison_tx["contexts"]["trace"]["trace_id"], TRACE_ID)
         self.assertEqual(comparison_tx["contexts"]["trace"]["parent_span_id"], request_tx["contexts"]["trace"]["span_id"])
-        qwen_span = next(s for s in comparison_tx["spans"] if s["op"] == "gen_ai.invoke_agent")
+        qwen_agent = next(s for s in comparison_tx["spans"] if s["op"] == "gen_ai.invoke_agent")
+        qwen_call = next(s for s in comparison_tx["spans"] if s["op"] == "gen_ai.chat")
 
         [received] = self.qwen.headers
-        self.assertEqual(received["sentry-trace"].split("-")[:2], [TRACE_ID, qwen_span["span_id"]])
+        self.assertEqual(qwen_call["parent_span_id"], qwen_agent["span_id"])
+        self.assertEqual(received["sentry-trace"].split("-")[:2], [TRACE_ID, qwen_call["span_id"]])
         self.assertIn(f"sentry-trace_id={TRACE_ID}", received["baggage"])
         self.assertEqual(received["authorization"], "Bearer worker-token", "worker auth unchanged")
         self.assertEqual(service.store.get(run["run_id"])["status"], "completed")
@@ -302,13 +383,15 @@ class ServiceBoundaryTests(unittest.TestCase):
         controller = {t["transaction"]: t for t in transport.items("transaction")}
         request_tx = next(t for name, t in controller.items() if name == "/v1/comparisons")
         comparison_tx = controller["Dapta model comparison"]
-        qwen_span = next(s for s in comparison_tx["spans"] if s["op"] == "gen_ai.invoke_agent")
+        qwen_agent = next(s for s in comparison_tx["spans"] if s["op"] == "gen_ai.invoke_agent")
+        qwen_call = next(s for s in comparison_tx["spans"] if s["op"] == "gen_ai.chat")
         worker_tx = next(t for t in worker_transport.items("transaction") if t["transaction"] == "/generate")
 
         chain = [(request_tx["contexts"]["trace"], PARENT_SPAN),                                # browser -> controller
                  (comparison_tx["contexts"]["trace"], request_tx["contexts"]["trace"]["span_id"]),  # request -> thread
-                 (qwen_span, comparison_tx["contexts"]["trace"]["span_id"]),                    # thread -> pool span
-                 (worker_tx["contexts"]["trace"], qwen_span["span_id"])]                        # controller -> worker
+                 (qwen_agent, comparison_tx["contexts"]["trace"]["span_id"]),                   # thread -> agent
+                 (qwen_call, qwen_agent["span_id"]),                                               # agent -> model call
+                 (worker_tx["contexts"]["trace"], qwen_call["span_id"])]                         # model call -> worker
         for context, parent in chain:
             self.assertEqual(context["trace_id"], TRACE_ID)
             self.assertEqual(context["parent_span_id"], parent)
@@ -354,6 +437,17 @@ class ServiceBoundaryTests(unittest.TestCase):
         [event] = transport.items("event")
         self.assertEqual(event["tags"]["dapta.stage"], "compare")
         self.assertNotIn(SECRET, transport.raw())
+
+    def test_provider_error_details_are_replaced_before_capture(self):
+        from dapta.openrouter import OpenRouterError
+
+        transport = start_sentry()
+        private = "provider echoed private prompt 91f8"
+        observability.capture_exception(OpenRouterError(private, status=403), stage="compare")
+        sentry_sdk.flush()
+        [event] = transport.items("event")
+        self.assertEqual(event["tags"]["dapta.error_category"], "content_policy")
+        self.assertNotIn(private, transport.raw())
 
 
 if __name__ == "__main__":

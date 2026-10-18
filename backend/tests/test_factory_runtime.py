@@ -1,7 +1,9 @@
 import unittest
+from unittest.mock import patch
 
 from dapta.factory_runtime import (
     AgentDatasetSource,
+    DevinIntegrator,
     SavedEvaluation,
     training_allocation_id,
     training_instance_id,
@@ -9,6 +11,41 @@ from dapta.factory_runtime import (
 
 
 class FactoryRuntimeTests(unittest.TestCase):
+    def test_devin_wait_suspends_the_stage_and_resumes_for_the_result(self):
+        class Stage:
+            active = None
+
+            def __init__(self):
+                self.actions = []
+
+            def suspend(self, reason):
+                self.actions.append(("suspend", reason))
+
+            def resume(self, reason):
+                self.actions.append(("resume", reason))
+
+        class Store:
+            def get_artifact(self, *_):
+                return {"session_id": "session-1"}
+
+            def set_artifact(self, *_):
+                pass
+
+            def record_progress(self, *_):
+                pass
+
+        class Client:
+            def get_session(self, _):
+                from dapta.devin import DevinSession
+                return DevinSession("session-1", None, "completed", acus_consumed=1.5)
+
+        stage = Stage()
+        integrator = DevinIntegrator(Client(), Store())
+        with patch("dapta.factory_runtime.current_factory_stage", return_value=stage):
+            result = integrator.integrate(job={"job_id": "job-1"}, skill_contract={})
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(stage.actions, [("suspend", "devin_session"), ("resume", "devin_completed")])
+
     def test_training_retries_share_a_stable_job_round_allocation(self):
         first = training_allocation_id("job-1", 1)
         second = training_allocation_id("job-1", 1)

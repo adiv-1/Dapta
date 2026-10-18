@@ -9,7 +9,14 @@ from typing import Any, Mapping
 
 
 class DevinError(RuntimeError):
-    pass
+    def __init__(self, message: str, *, status: int | None = None):
+        super().__init__(message)
+        self.status = status
+        # Devin response bodies may contain session details. Preserve them locally but keep the
+        # captured Sentry exception content-free.
+        self.dapta_sentry_message = (
+            f"Devin request failed with HTTP {status}" if status is not None else "Devin request failed"
+        )
 
 
 @dataclass(frozen=True)
@@ -88,7 +95,9 @@ class DevinClient:
                 return json.loads(response.read().decode("utf-8"))
         except urllib.error.HTTPError as error:
             body = error.read().decode("utf-8", errors="replace")
-            raise DevinError(f"Devin request failed with HTTP {error.code}: {body[:300]}") from error
+            raise DevinError(
+                f"Devin request failed with HTTP {error.code}: {body[:300]}", status=error.code,
+            ) from error
         except (urllib.error.URLError, json.JSONDecodeError) as error:
             raise DevinError(f"Devin request failed: {error}") from error
 

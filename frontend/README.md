@@ -15,4 +15,6 @@ build automatically invokes the deployed `dapta-proxy` function. Set only
 variables.
 
 Invite-only access is enforced by Base44 before the proxy forwards a request.
-Sentry Replay masks all text and blocks document media by default.
+Sentry Replay masks all text and blocks document media by default. Browser tracing and routine
+Replay sessions default to 5% sampling, while error Replays remain at 100%; all three rates are
+configurable with the `VITE_SENTRY_*_SAMPLE_RATE` variables shown in `.env.example`.

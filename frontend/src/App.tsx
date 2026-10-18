@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import * as Sentry from "@sentry/react";
 import {
   Activity, ArrowUp, BarChart3, BrainCircuit, Check, Clock3, Cpu,
   Database, FileText, Layers3, Loader2, PackageCheck, Plus, Router,
   ShieldCheck, Sparkles, Upload, UploadCloud, Wrench, X,
 } from "lucide-react";
 import { api } from "./api";
+import { PollCoordinator, type PollTelemetry } from "./polling";
 import type { Adapter, Benchmark, Condition, Job, Run } from "./types";
 
 type Tab = "chat" | "performance" | "skills";
@@ -15,6 +17,22 @@ const labels: Record<string, string> = {
   frontier_a: "Claude",
   frontier_b: "GPT",
 };
+
+function recordPoll(event: PollTelemetry) {
+  Sentry.addBreadcrumb({
+    category: "dapta.poll",
+    message: `poll_${event.outcome}`,
+    level: event.outcome === "failed" ? "warning" : "info",
+    data: event,
+  });
+  // Capture the first and every third consecutive failure without attaching upstream response text.
+  if (event.outcome === "failed"
+      && (event.consecutive_failure_count === 1 || event.consecutive_failure_count % 3 === 0)) {
+    Sentry.captureException(new Error("Dapta background polling failed"), {
+      tags: { "dapta.error_category": "polling", "dapta.consecutive_failures": event.consecutive_failure_count },
+    });
+  }
+}
 
 export default function App() {
   const [tab, setTab] = useState<Tab>("chat");
@@ -32,8 +50,10 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const fileInput = useRef<HTMLInputElement>(null);
+  const polls = useRef(new PollCoordinator());
+  const knownStages = useRef(new Map<string, string>());
 
-  const refresh = async () => {
+  const refresh = useCallback(async () => polls.current.run(async () => {
     const [adaptersResult, benchmarksResult, runsResult, jobsResult] = await Promise.allSettled([
       api.adapters(), api.benchmarks(), api.runs(), api.jobs(),
     ]);
@@ -53,17 +73,36 @@ export default function App() {
     const failure = [adaptersResult, benchmarksResult, runsResult, jobsResult]
       .find((result) => result.status === "rejected");
     if (failure?.status === "rejected") throw failure.reason;
-  };
+  }, recordPoll), []);
 
-  useEffect(() => { refresh().catch((reason) => setError(reason.message)); }, []);
+  useEffect(() => { refresh().catch((reason) => setError(reason.message)); }, [refresh]);
 
   useEffect(() => {
     const active = runs.some((run) => !["completed", "failed"].includes(run.status))
       || jobs.some((job) => !["ready", "failed"].includes(job.status));
     if (!active) return;
-    const timer = window.setInterval(() => refresh().catch(() => undefined), 1500);
+    const timer = window.setInterval(() => refresh().catch((reason) => {
+      setError(reason instanceof Error ? reason.message : "Live updates temporarily failed");
+    }), 1500);
     return () => window.clearInterval(timer);
-  }, [runs, jobs]);
+  }, [runs, jobs, refresh]);
+
+  useEffect(() => {
+    for (const job of jobs) {
+      const previous = knownStages.current.get(job.job_id);
+      if (previous && previous !== job.status) {
+        Sentry.addBreadcrumb({
+          category: "dapta.factory",
+          message: "stage_transitioned",
+          level: "info",
+          data: { job_id: job.job_id, previous_stage: previous, next_stage: job.status },
+        });
+      }
+      knownStages.current.set(job.job_id, job.status);
+    }
+    const current = jobs.find((job) => job.job_id === selectedJob) || jobs[0];
+    Sentry.setTag("dapta.factory_stage", current?.status || "none");
+  }, [jobs, selectedJob]);
 
   const currentRun = runs.find((run) => run.run_id === selectedRun);
   const currentBenchmark = benchmarks.find((item) => item.benchmark_id === selectedBenchmark);

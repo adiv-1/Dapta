@@ -1,9 +1,15 @@
 import unittest
 
-from dapta.devin import _session
+from dapta.devin import DevinError, _session
+from dapta.observability import error_category
 
 
 class DevinResponseTests(unittest.TestCase):
+    def test_provider_error_status_and_sentry_message_are_safe(self):
+        error = DevinError("response included private session output", status=429)
+        self.assertEqual(error_category(error), "rate_limited")
+        self.assertEqual(error.dapta_sentry_message, "Devin request failed with HTTP 429")
+
     def test_parses_waiting_status_and_plural_pull_requests(self):
         parsed = _session({
             "session_id": "session-1",

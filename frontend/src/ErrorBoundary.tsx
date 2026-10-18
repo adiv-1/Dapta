@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
+import * as Sentry from "@sentry/react";
 
 export class AppErrorBoundary extends Component<{ children: ReactNode }, { error?: Error }> {
   state: { error?: Error } = {};
@@ -6,6 +7,10 @@ export class AppErrorBoundary extends Component<{ children: ReactNode }, { error
   static getDerivedStateFromError(error: Error) { return { error }; }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
+    Sentry.captureException(error, {
+      tags: { "dapta.error_category": "react_render" },
+      contexts: { react: { component_stack: info.componentStack || "unavailable" } },
+    });
     console.error("Dapta UI recovered from a render error", error, info);
   }
 

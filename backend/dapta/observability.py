@@ -251,6 +251,35 @@ def error_category(error: BaseException) -> str:
         status = int(embedded[1]) if embedded else None
     if name == "OutOfMemoryError" or "out of memory" in text:
         return "gpu_oom"
+    # OpenRouter documents provider-specific HTTP meanings that differ from generic HTTP
+    # semantics (notably 402 credits and 403 moderation). Classify these before the generic
+    # status handling below so operational alerts point at the action that can resolve them.
+    if name == "OpenRouterError":
+        if "exhausted the completion budget" in text:
+            return "output_truncated"
+        if "network error" in text:
+            return "network"
+        if "invalid json" in text:
+            return "invalid_response"
+        if status == 400:
+            return "bad_request"
+        if status == 401:
+            return "auth"
+        if status == 402:
+            return "insufficient_credits"
+        if status == 403:
+            return "content_policy"
+        if status == 408:
+            return "timeout"
+        if status == 429:
+            return "rate_limited"
+        if status in (502, 503):
+            return "provider_unavailable"
+        if isinstance(status, int) and status >= 500:
+            return "provider_error"
+        if isinstance(status, int) and status >= 400:
+            return "bad_request"
+        return "invalid_output"
     if isinstance(error, (TimeoutError, socket.timeout)) or "timed out" in text or status in (408, 504):
         return "timeout"
     if status == 429:
@@ -267,12 +296,6 @@ def error_category(error: BaseException) -> str:
         return "network"
     if isinstance(error, json.JSONDecodeError):
         return "invalid_response"
-    if name == "OpenRouterError":
-        if "exhausted the completion budget" in text:
-            return "output_truncated"
-        if "network error" in text:
-            return "network"
-        return "invalid_response" if "invalid json" in text else "invalid_output"
     if name == "DevinError" and "ended with status" in text:
         return "session_failed"
     if name in {"JobConflict", "JobBlocked", "InvalidTransition"}:
@@ -299,6 +322,8 @@ def redact_for_sentry(error: BaseException, message: str, *, category: str | Non
 _SPAN_STATUS = {
     "timeout": "deadline_exceeded", "rate_limited": "resource_exhausted", "gpu_oom": "resource_exhausted",
     "auth": "unauthenticated", "network": "unavailable", "provider_error": "unavailable",
+    "provider_unavailable": "unavailable", "insufficient_credits": "resource_exhausted",
+    "content_policy": "permission_denied",
 }
 
 

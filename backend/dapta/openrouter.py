@@ -19,6 +19,12 @@ class OpenRouterError(RuntimeError):
     def __init__(self, message: str, *, status: int | None = None):
         super().__init__(message)
         self.status = status
+        # Provider error text can include request-specific details. Keep it for the local UI/ledger,
+        # but replace it with a content-free message if an outer stage captures this exception.
+        self.dapta_sentry_message = (
+            f"OpenRouter request failed with HTTP {status}" if status is not None
+            else "OpenRouter request failed"
+        )
 
 
 class JsonTransport(Protocol):
