@@ -59,3 +59,13 @@ Run `npm test` and `npm run build`. For visual checks without paid model calls,
 start Vite and open `/tests/fixtures/output-preview.html`. This local-only entry
 has explicitly labelled synthetic chart/receipt/routing fixtures and is not
 included in the production build.
+
+## Stop a specialist build
+
+Use **Stop build → Confirm stop** at any factory stage. The authenticated proxy
+calls `POST /v1/jobs/{id}/cancel`; the UI keeps polling through `cancelling` until
+the backend confirms `cancelled`. It then offers **Back to chat**. Network errors
+do not falsely report success, and cleanup failures offer **Retry stop**.
+Active builds reappear after refresh or New conversation, so paid work cannot
+silently disappear from the interface. Existing adapters and artifacts survive;
+an in-flight provider call may finish and is not refundable by cancellation.

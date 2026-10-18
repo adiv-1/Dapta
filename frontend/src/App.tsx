@@ -74,7 +74,7 @@ export default function App() {
   useEffect(() => { refresh().catch((reason) => setError(reason instanceof Error ? reason.message : "Could not load saved work")); }, [refresh]);
   useEffect(() => {
     const active = runs.some((run) => !["completed", "failed"].includes(run.status))
-      || jobs.some((job) => !["ready", "failed"].includes(job.status));
+      || jobs.some((job) => !["ready", "failed", "cancelled"].includes(job.status));
     if (!active) return;
     const timer = window.setInterval(() => refresh().catch((reason) => {
       setError(reason instanceof Error ? reason.message : "Live updates temporarily failed");
@@ -101,6 +101,11 @@ export default function App() {
       setJobs((current) => current.map((item) => item.job_id === jobId ? retried : item));
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not retry this stage"); }
   }
+  async function stopBuild(jobId: string) {
+    const stopped = await api.cancelJob(jobId);
+    setJobs((current) => current.map((item) => item.job_id === jobId ? stopped : item));
+    Sentry.addBreadcrumb({ category: "dapta.factory", message: "stop_requested", data: { job_id: jobId, status: stopped.status } });
+  }
   return <div className="app-shell">
     <header className="topbar">
       <a className="brand" href="#" aria-label="Dapta home" onClick={() => setTab("chat")}><span className="brand-lockup"><img src="/dapta-chameleon.png" alt="" /><span className="brand-word">Dapta</span></span></a>
@@ -113,7 +118,7 @@ export default function App() {
         onRun={(run) => { setRuns((current) => [run, ...current.filter((item) => item.run_id !== run.run_id)]); setSelectedRun(run.run_id); }}
         onJob={(job) => setJobs((current) => [job, ...current.filter((item) => item.job_id !== job.job_id)])}
         renderRun={(run) => <ModelGrid run={run} running={!run || ["queued", "running"].includes(run.status)} />}
-        renderJob={(job) => <FactoryTimeline job={job} onRetry={retry} />}
+        renderJob={(job, dismiss) => <FactoryTimeline job={job} onRetry={retry} onStop={stopBuild} onDismiss={dismiss} />}
         openLibrary={() => setLibraryOpen(true)} selectedAdapter={suggestedAdapter} clearAdapter={() => setSuggestedAdapter(undefined)}
         openedJob={jobs.find((job) => job.job_id === selectedJob)} clearJob={() => setSelectedJob(undefined)}
       /></div>
@@ -271,16 +276,19 @@ export function Registry({ adapters, jobs, selectedJob, setSelectedJob, onTest, 
   );
 }
 
-function FactoryTimeline({ job, onRetry }: { job: Job; onRetry: (jobId: string) => Promise<void> }) {
-  const now = useLiveNow(!["ready", "failed"].includes(job.status));
+export function FactoryTimeline({ job, onRetry, onStop, onDismiss }: { job: Job; onRetry: (jobId: string) => Promise<void>; onStop?: (jobId: string) => Promise<void>; onDismiss?: () => void }) {
+  const stopping = job.status === "cancelling";
+  const stopped = job.status === "cancelled" || job.failure_code === "UserCancelled";
+  const terminal = stopped || ["ready", "failed"].includes(job.status);
+  const now = useLiveNow(!terminal);
   const backendOrder = ["queued", "architecting", "integrating", "building_dataset", "validating", "awaiting_compute", "provisioning_gpu", "training", "evaluating", "publishing", "ready"];
-  const failedFrom = [...(job.events || [])].reverse().find((event) => event.to_status === "failed")?.from_status;
-  const effectiveStatus = job.status === "failed" ? failedFrom || "queued" : job.status;
+  const failedFrom = [...(job.events || [])].reverse().find((event) => ["failed", "cancelling"].includes(event.to_status))?.from_status;
+  const effectiveStatus = job.status === "failed" || stopping || stopped ? failedFrom || "queued" : job.status;
   const current = Math.max(0, backendOrder.indexOf(effectiveStatus));
   const progress = job.progress;
   const published = Boolean(job.publish_result);
   const overall = job.status === "ready" ? 100 : published ? 96 : Math.max(4, current / (backendOrder.length - 1) * 100);
-  const finishedAt = ["ready", "failed"].includes(job.status)
+  const finishedAt = terminal
     ? latestJobTimestamp(job) : new Date(now).toISOString();
   const totalSeconds = secondsBetween(job.created_at, finishedAt);
   const totalCost = Number(job.usage?.total_cost_usd || progress?.cost_usd || 0);
@@ -288,15 +296,16 @@ function FactoryTimeline({ job, onRetry }: { job: Job; onRetry: (jobId: string) 
   const repairs = repairSuggestions(job);
   return (
     <article className={`factory-panel ${job.status}`}>
-      <div className="factory-head"><div><span className="factory-state">{job.status === "ready" ? <Check size={14} /> : job.status === "failed" ? <X size={14} /> : <Loader2 className="spin" size={14} />}{stageLabel(job.status)}</span><h2>{job.skill_id || "New LoRA specialist"}</h2><p>{job.workflow}</p></div><div className="factory-percent"><strong>{Math.round(overall)}%</strong><span>Round {job.dataset_round || 1}</span></div></div>
+      <BuildStopControl job={job} onStop={onStop} onDismiss={onDismiss} />
+      <div className="factory-head"><div><span className="factory-state">{job.status === "ready" ? <Check size={14} /> : stopped || job.status === "failed" ? <X size={14} /> : <Loader2 className="spin" size={14} />}{stopped ? "Stopped" : stopping ? "Stopping safely" : stageLabel(job.status)}</span><h2>{job.skill_id || "New LoRA specialist"}</h2><p>{job.workflow}</p></div><div className="factory-percent"><strong>{Math.round(overall)}%</strong><span>Round {job.dataset_round || 1}</span></div></div>
       <div className="factory-totals">
         <div><small>End-to-end timer</small><strong>{formatDuration(totalSeconds)}</strong></div>
         <div><small>Universal cost</small><strong>${totalCost.toFixed(4)}</strong></div>
-        <div><small>Estimated completion</small><strong>{eta == null ? (published ? "Published" : "Decision needed") : `~${formatDuration(eta)}`}</strong></div>
+        <div><small>Estimated completion</small><strong>{stopped ? "Stopped" : stopping ? "Cleaning up" : eta == null ? (published ? "Published" : "Decision needed") : `~${formatDuration(eta)}`}</strong></div>
         <div><small>Devin usage</small><strong>{Number(job.devin_session?.acus_consumed || job.devin_session?.on_demand_usage || 0).toFixed(2)} ACUs</strong></div>
       </div>
       <div className="factory-progress"><span style={{ width: `${overall}%` }} /></div>
-      <SentryDecision job={job} />
+      {!stopping && !stopped && <SentryDecision job={job} />}
       <div className="factory-workspace">
         <div className="pipeline">
           {factoryStages.map((stage) => {
@@ -307,7 +316,7 @@ function FactoryTimeline({ job, onRetry }: { job: Job; onRetry: (jobId: string) 
             || (stage.key === "evaluating" && Boolean(job.deterministic_evaluation))
             || (stage.key === "publishing" && published)
             || current > stageBackendIndex;
-          const active = !completed && (
+          const active = !terminal && !stopping && !completed && (
             stage.key === job.status
             || (stage.key === "training" && job.status === "provisioning_gpu")
           );
@@ -327,10 +336,30 @@ function FactoryTimeline({ job, onRetry }: { job: Job; onRetry: (jobId: string) 
         </div>
         <AgentOutputPanel job={job} />
       </div>
-      {job.failure_message && <div className="factory-error repair-card"><Wrench size={18} /><div><strong>{job.failure_code}</strong><span>{job.failure_message}</span>{repairs.length > 0 && <ul>{repairs.map((repair) => <li key={repair}>{repair}</li>)}</ul>}</div><button onClick={() => onRetry(job.job_id)}>{job.failure_code === "EvaluationOutputTruncated" ? "Apply repair & rerun benchmark" : "Retry failed stage"}</button></div>}
+      {job.failure_message && !stopped && <div className="factory-error repair-card"><Wrench size={18} /><div><strong>{job.failure_code}</strong><span>{job.failure_message}</span>{repairs.length > 0 && <ul>{repairs.map((repair) => <li key={repair}>{repair}</li>)}</ul>}</div><button onClick={() => onRetry(job.job_id)}>{job.failure_code === "EvaluationOutputTruncated" ? "Apply repair & rerun benchmark" : "Retry failed stage"}</button></div>}
       {job.deterministic_evaluation?.conditions && <FactoryResults evaluation={job.deterministic_evaluation} />}
     </article>
   );
+}
+
+function BuildStopControl({ job, onStop, onDismiss }: { job: Job; onStop?: (id: string) => Promise<void>; onDismiss?: () => void }) {
+  const [confirm, setConfirm] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+  const stopped = job.status === "cancelled" || job.failure_code === "UserCancelled";
+  const stopping = job.status === "cancelling";
+  if (["ready", "failed"].includes(job.status) && !stopped) return null;
+  async function stop() {
+    if (!onStop || busy) return;
+    setBusy(true); setError(undefined);
+    try { await onStop(job.job_id); setConfirm(false); }
+    catch (reason) { setError(reason instanceof Error ? reason.message : "Could not confirm the stop. Try again; this build may still be running."); }
+    finally { setBusy(false); }
+  }
+  return <div className={`build-stop-control ${stopped ? "stopped" : ""}`}>
+    <div role="status"><strong>{stopped ? "Build stopped" : stopping ? "Stopping safely…" : confirm ? "Stop this build?" : "You’re in control"}</strong><p>{stopped ? "No further stages will start. Saved artifacts and existing adapters are preserved." : stopping ? "Waiting for active work to exit, terminating Devin if used, and restoring inference after GPU work. No new stages will start." : confirm ? "Stops this build only. Already-incurred costs remain. Existing adapters and saved artifacts are kept." : "You can safely stop this build at any stage."}</p>{stopping && job.cancellation?.cleanup_error && <p className="reply-error">{job.cancellation.cleanup_error}</p>}{error && <p className="reply-error" role="alert">{error}</p>}</div>
+    <div>{stopped ? onDismiss && <button onClick={onDismiss}>Back to chat</button> : stopping ? job.cancellation?.cleanup_error && <button disabled={busy} onClick={() => void stop()}>{busy ? "Retrying…" : "Retry stop"}</button> : confirm ? <><button disabled={busy} onClick={() => setConfirm(false)}>Keep building</button><button className="stop-build" disabled={busy || !onStop} onClick={() => void stop()}>{busy ? "Requesting stop…" : "Confirm stop"}</button></> : <button className="stop-build" disabled={!onStop} onClick={() => setConfirm(true)}>Stop build</button>}</div>
+  </div>;
 }
 
 function SentryDecision({ job }: { job: Job }) {
@@ -429,7 +458,7 @@ function repairSuggestions(job: Job) {
 }
 
 function estimateJobEta(job: Job) {
-  if (["ready", "failed"].includes(job.status)) return null;
+  if (["ready", "failed", "cancelling", "cancelled"].includes(job.status)) return null;
   if (job.progress?.eta_seconds != null) return job.progress.eta_seconds;
   const estimates: Record<string, number> = {
     queued: 1500, architecting: 1440, integrating: 1200, building_dataset: 900,

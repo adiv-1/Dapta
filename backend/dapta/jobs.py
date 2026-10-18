@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Callable, Iterator, Mapping, Protocol
 
 from .ledger import UsageLedger
+from .cancellation import BuildCancelled, BuildCleanupError, cancellation_scope, check_cancelled
 from .observability import FactoryStage, emit_job_root, error_category, log_event, span
 
 
@@ -18,7 +19,7 @@ SCHEMA_VERSION = 2
 JOB_STAGES = (
     "queued", "architecting", "integrating", "building_dataset", "validating",
     "awaiting_compute", "provisioning_gpu", "training", "evaluating", "publishing",
-    "ready", "failed",
+    "ready", "failed", "cancelling", "cancelled",
 )
 ALLOWED_TRANSITIONS = {
     "queued": {"architecting", "failed"},
@@ -33,7 +34,12 @@ ALLOWED_TRANSITIONS = {
     "publishing": {"ready", "failed"},
     "ready": set(),
     "failed": set(),
+    "cancelling": {"cancelled"},
+    "cancelled": set(),
 }
+for _stage_name in JOB_STAGES:
+    if _stage_name not in {"ready", "failed", "cancelling", "cancelled"}:
+        ALLOWED_TRANSITIONS[_stage_name].add("cancelling")
 
 
 class JobNotFound(LookupError):
@@ -192,7 +198,8 @@ class JobStore:
                     'route_decision.json', 'progress.json', 'validation.json',
                     'deterministic_evaluation.json', 'publish_result.json',
                     'devin_session.json', 'devin_result.json', 'integration.json',
-                    'skill_spec.json', 'output_schema.json', 'evaluation_plan.json'
+                    'skill_spec.json', 'output_schema.json', 'evaluation_plan.json',
+                    'cancellation.json'
                 )
                 """,
                 (job_id,),
@@ -233,6 +240,8 @@ class JobStore:
         return self.get_job(job_id)
 
     def record_progress(self, job_id: str, progress: Mapping[str, Any]) -> None:
+        if self.get_job(job_id)["status"] in {"cancelled", "failed", "ready"}:
+            return
         now = _timestamp()
         self.set_artifact(job_id, "progress.json", _safe_progress(progress), created_at=now)
         with self._connect(immediate=True) as connection:
@@ -264,7 +273,7 @@ class JobStore:
             if current is None:
                 raise JobNotFound(job_id)
             from_status = current["status"]
-            if from_status == "failed":
+            if from_status in {"failed", "cancelling", "cancelled"}:
                 already_failed = True
             elif "failed" not in ALLOWED_TRANSITIONS[from_status]:
                 raise InvalidTransition(f"cannot fail a job in {from_status}")
@@ -285,6 +294,31 @@ class JobStore:
                 )
         if not already_failed:
             _log_transition(job_id, from_status, "failed")
+        return self.get_job(job_id)
+
+    def check_cancelled(self, job_id: str) -> None:
+        if self.get_job(job_id)["status"] in {"cancelling", "cancelled"}:
+            raise BuildCancelled("Build stopped at user request")
+
+    def request_cancel(self, job_id: str) -> dict[str, Any]:
+        now = _timestamp()
+        with self._connect(immediate=True) as connection:
+            row = connection.execute("SELECT status FROM jobs WHERE job_id=?", (job_id,)).fetchone()
+            if row is None:
+                raise JobNotFound(job_id)
+            if row["status"] not in {"ready", "failed", "cancelling", "cancelled"}:
+                _apply_transition(connection, job_id, "cancelling", now, _json({"requested_by": "user"}))
+        log_event("job_cancel_requested", job_id=job_id)
+        return self.get_job(job_id)
+
+    def finish_cancel(self, job_id: str) -> dict[str, Any]:
+        with self._connect(immediate=True) as connection:
+            row = connection.execute("SELECT status FROM jobs WHERE job_id=?", (job_id,)).fetchone()
+            if row is None:
+                raise JobNotFound(job_id)
+            active = connection.execute("SELECT 1 FROM job_stage_attempts WHERE job_id=? AND status='running'", (job_id,)).fetchone()
+            if row["status"] == "cancelling" and active is None:
+                _apply_transition(connection, job_id, "cancelled", _timestamp(), _json({"cleanup_confirmed": True}))
         return self.get_job(job_id)
 
     def retry_failed(self, job_id: str) -> dict[str, Any]:
@@ -485,6 +519,11 @@ class JobStore:
         now = _timestamp(claimed_at)
         try:
             with self._connect(immediate=True) as connection:
+                current = connection.execute("SELECT status FROM jobs WHERE job_id=?", (job_id,)).fetchone()
+                if current is None:
+                    raise JobNotFound(job_id)
+                if current["status"] in {"ready", "failed", "cancelling", "cancelled"}:
+                    raise BuildCancelled("Job no longer accepts stage claims")
                 connection.execute(
                     """
                     INSERT INTO job_stage_attempts(job_id, stage, round, status, claimed_at, completed_at)
@@ -507,6 +546,9 @@ class JobStore:
                     raise JobConflict(
                         f"stage was already claimed: {stage} round {round}"
                     ) from error
+                current = connection.execute("SELECT status FROM jobs WHERE job_id=?", (job_id,)).fetchone()
+                if current is None or current["status"] in {"ready", "failed", "cancelling", "cancelled"}:
+                    raise BuildCancelled("Job no longer accepts stage claims")
                 connection.execute(
                     """
                     UPDATE job_stage_attempts
@@ -528,7 +570,7 @@ class JobStore:
                 SELECT a.job_id, a.stage, a.round, j.status
                 FROM job_stage_attempts a
                 JOIN jobs j ON j.job_id = a.job_id
-                WHERE a.status='running' AND j.status NOT IN ('ready', 'failed')
+                WHERE a.status='running' AND j.status NOT IN ('ready', 'failed', 'cancelled')
                 """
             ).fetchall()
             for row in rows:
@@ -560,7 +602,7 @@ class JobStore:
         next_status: str | None = None, metadata: Mapping[str, Any] | None = None,
         completed_at: str | None = None,
     ) -> None:
-        if status not in {"completed", "failed"}:
+        if status not in {"completed", "failed", "cancelled"}:
             raise ValueError("stage attempt status must be completed or failed")
         now = _timestamp(completed_at)
         with self._connect(immediate=True) as connection:
@@ -581,6 +623,7 @@ class JobStore:
         self, *, adapter_id: str, skill_id: str, version: str, base_model: str,
         artifact_uri: str, metadata: Mapping[str, Any] | None = None,
         created_at: str | None = None,
+        job_id: str | None = None,
     ) -> dict[str, Any]:
         now = _timestamp(created_at)
         values = (
@@ -589,7 +632,8 @@ class JobStore:
             _required(artifact_uri, "artifact_uri"), _json(metadata), now,
         )
         try:
-            with self._connect() as connection:
+            with self._connect(immediate=True) as connection:
+                _guard_publication(connection, job_id)
                 connection.execute(
                     """
                     INSERT INTO adapters(adapter_id, skill_id, version, base_model, artifact_uri,
@@ -609,9 +653,10 @@ class JobStore:
         return self.get_adapter(adapter_id)
 
     def update_adapter(
-        self, *, adapter_id: str, artifact_uri: str, metadata: Mapping[str, Any]
+        self, *, adapter_id: str, artifact_uri: str, metadata: Mapping[str, Any], job_id: str | None = None,
     ) -> dict[str, Any]:
         with self._connect(immediate=True) as connection:
+            _guard_publication(connection, job_id)
             cursor = connection.execute(
                 "UPDATE adapters SET artifact_uri=?, metadata_json=? WHERE adapter_id=?",
                 (_required(artifact_uri, "artifact_uri"), _json(metadata), adapter_id),
@@ -736,7 +781,7 @@ class AdapterJobOrchestrator:
 
     def advance(self, job_id: str) -> dict[str, Any]:
         status = self.store.get_job(job_id)["status"]
-        if status in {"ready", "failed"}:
+        if status in {"ready", "failed", "cancelling", "cancelled"}:
             raise JobBlocked(f"job is {status}")
         if status == "training":
             raise JobConflict("training is already owned by a worker")
@@ -920,6 +965,7 @@ class AdapterJobOrchestrator:
             uri = self.publisher.promote(
                 job=job, training=training, evaluation=evaluation, skill_contract=contract,
             )
+            check_cancelled()
             skill_id = job["skill_id"] or _skill_id(contract["skill_spec"], job["workflow_hash"])
             adapter_id = training.get("adapter_id") or f"generated/{skill_id}/{training['version']}"
             metadata = {
@@ -935,7 +981,7 @@ class AdapterJobOrchestrator:
             try:
                 adapter = self.store.register_adapter(
                     adapter_id=adapter_id, skill_id=skill_id, version=training["version"],
-                    base_model=training["base_model"], artifact_uri=uri, metadata=metadata,
+                    base_model=training["base_model"], artifact_uri=uri, metadata=metadata, job_id=job_id,
                 )
             except JobConflict:
                 existing = self.store.get_adapter(adapter_id)
@@ -946,7 +992,7 @@ class AdapterJobOrchestrator:
                 ):
                     raise
                 adapter = self.store.update_adapter(
-                    adapter_id=adapter_id, artifact_uri=uri, metadata=metadata,
+                    adapter_id=adapter_id, artifact_uri=uri, metadata=metadata, job_id=job_id,
                 )
             self.store.set_artifact(job_id, "publish_result.json", {
                 "adapter": adapter, "artifact_uri": uri,
@@ -976,13 +1022,14 @@ class AdapterJobOrchestrator:
             log_event("stage_started", **telemetry.fields)
             started = time.monotonic()
             try:
-                if stage in {"skill_integration", "adapter_training"}:
-                    # These operations wait on external work. Their implementations suspend the
-                    # stage transaction while idle and resume it for the result.
-                    next_status = work()
-                else:
-                    with span(operation, stage.replace("_", " ").title(), job_id=job_id, round=round):
+                with cancellation_scope(lambda: self.store.check_cancelled(job_id)):
+                    check_cancelled()
+                    if stage in {"skill_integration", "adapter_training"}:
                         next_status = work()
+                    else:
+                        with span(operation, stage.replace("_", " ").title(), job_id=job_id, round=round):
+                            next_status = work()
+                    check_cancelled()
                 with span("db.sql.transaction", "complete stage", **telemetry.fields):
                     self.store.complete_stage(
                         job_id, stage, status="completed", round=round, next_status=next_status,
@@ -996,6 +1043,16 @@ class AdapterJobOrchestrator:
                           duration_ms=round_ms(started))
                 return self.store.get_job(job_id)
             except Exception as error:
+                if self.store.get_job(job_id)["status"] in {"cancelling", "cancelled"}:
+                    try:
+                        self.store.complete_stage(job_id, stage, status="cancelled", round=round)
+                    except JobConflict:
+                        pass
+                    if isinstance(error, BuildCleanupError):
+                        self.store.set_artifact(job_id, "cancellation.json", {"cleanup_error": "Inference reload failed. Retry Stop build to restore service.", "inference_restore_required": True})
+                    self.ledger.record_run_event(run_id=job_id, stage=stage, status="cancelled", metadata={"round": round})
+                    log_event("stage_cancelled", **telemetry.fields)
+                    raise BuildCancelled("Build stopped at user request") from None
                 _finish_attempt(self.store, job_id, stage, round)
                 if isinstance(error, JobBlocked):
                     log_event("stage_blocked", level="warning", **telemetry.fields, reason=str(error)[:200])
@@ -1057,6 +1114,14 @@ class AdapterJobOrchestrator:
         if self.agents is None:
             raise JobBlocked("factory agents are not configured")
         return self.agents
+
+
+def _guard_publication(connection: sqlite3.Connection, job_id: str | None) -> None:
+    if job_id is None:
+        return
+    row = connection.execute("SELECT status FROM jobs WHERE job_id=?", (job_id,)).fetchone()
+    if row is None or row["status"] in {"cancelling", "cancelled"}:
+        raise BuildCancelled("Cancelled build cannot publish a registry entry")
 
 
 def _apply_transition(

@@ -128,6 +128,14 @@ cost, accuracy, and overall winner for each run.
 **Prior adapters** opens a bottom drawer containing reusable specialists and
 build history. Selecting a specialist returns to chat for routing. Build
 progress stays in the conversation, with each stage and its provider visible.
+Every active build has a sticky **Stop build** control with confirmation. Stop
+requests persist server-side: no later stage starts, active Devin sessions are
+terminated, and a training/evaluation worker is stopped and reaped before Qwen
+inference reloads. **Stopping safely** remains visible until cleanup is confirmed;
+failed cleanup offers **Retry stop**. An already-running provider request may
+finish and incur its existing charge. Uploaded/published artifacts and prior
+adapters are not deleted. Use **Back to chat** after stopping to reset the view;
+refreshing or starting a new conversation does not silently abandon active builds.
 The factory feedback panel applies this decision order:
 
 1. Repair infrastructure or an incomplete evaluation before judging quality.
@@ -151,6 +159,7 @@ GET  /v1/benchmarks
 GET  /v1/adapters
 POST /v1/jobs
 GET  /v1/jobs/{id}
+POST /v1/jobs/{id}/cancel
 GET  /v1/jobs/{id}/events
 POST /v1/jobs/{id}/repair-evaluation
 GET  /v1/agent/tools

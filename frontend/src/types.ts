@@ -58,6 +58,7 @@ export type Job = {
   updated_at: string;
   failure_code?: string;
   failure_message?: string;
+  cancellation?: { cleanup_complete?: boolean; cleanup_error?: string; message?: string };
   dataset_round?: number;
   route?: RouteDecision;
   progress?: FactoryProgress;

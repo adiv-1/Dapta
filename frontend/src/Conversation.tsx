@@ -10,7 +10,7 @@ type Pending = { workflow: string; route: RouteDecision; step: "input" | "contra
 export function Conversation({ adapters, jobs, runs, onRun, onJob, renderRun, renderJob, openLibrary, selectedAdapter, clearAdapter, openedJob, clearJob }: {
   adapters: Adapter[]; jobs: Job[]; runs: Run[];
   onRun: (run: Run) => void; onJob: (job: Job) => void;
-  renderRun: (run?: Run) => ReactNode; renderJob: (job: Job) => ReactNode;
+  renderRun: (run?: Run) => ReactNode; renderJob: (job: Job, dismiss?: () => void) => ReactNode;
   openLibrary: () => void; selectedAdapter?: Adapter; clearAdapter: () => void;
   openedJob?: Job; clearJob: () => void;
 }) {
@@ -125,7 +125,8 @@ export function Conversation({ adapters, jobs, runs, onRun, onJob, renderRun, re
   }
 
   function startFresh() { if (busy) return; setTurns([]); setPending(undefined); setDraft(""); setAttachment(undefined); setError(undefined); clearAdapter(); clearJob(); input.current?.focus(); }
-  const hasWork = turns.length > 0 || Boolean(openedJob);
+  const backgroundJobs = jobs.filter((job) => !["ready", "failed", "cancelled"].includes(job.status) && job.job_id !== openedJob?.job_id && !turns.some((turn) => turn.jobId === job.job_id));
+  const hasWork = turns.length > 0 || Boolean(openedJob) || backgroundJobs.length > 0;
   const last = turns[turns.length - 1];
   return <section className={`conversation ${hasWork ? "has-work" : ""}`}>
     {!hasWork ? <div className="conversation-welcome"><div className="welcome-kicker"><span /> Your work, adapted.</div><h1>What do you do<br /><span>over and over?</span></h1><p>Tell Dapta once. JEV finds a specialist or helps you create one.<br className="desktop-break" /> See what changes in seconds, tokens, and dollars.</p><div className="starter-prompts">{["Extract fields from an NDA", "Route customer support tickets", "Create a new specialist"].map((text) => <button key={text} onClick={() => { setDraft(text); input.current?.focus(); }}>{text}<ArrowUpRight size={14} /></button>)}</div></div> : <div className="conversation-thread">
@@ -137,9 +138,10 @@ export function Conversation({ adapters, jobs, runs, onRun, onJob, renderRun, re
           {turn.reply ? <p className={turn.failed ? "reply-error" : ""}>{turn.reply}</p> : busy && turn.id === last?.id ? <div className="routing-live"><Loader2 size={15} className="spin" />{busy}</div> : null}
         </div>
         {turn.runId && renderRun(runs.find((run) => run.run_id === turn.runId))}
-        {turn.jobId && jobs.find((job) => job.job_id === turn.jobId) && <div className="inline-build">{renderJob(jobs.find((job) => job.job_id === turn.jobId)!)}</div>}
+        {turn.jobId && jobs.find((job) => job.job_id === turn.jobId) && <div className="inline-build">{renderJob(jobs.find((job) => job.job_id === turn.jobId)!, startFresh)}</div>}
       </div>)}
-      {openedJob && <div className="inline-build"><div className="assistant-identity"><span className="jev-avatar"><Layers3 size={17} /></span><strong>Specialist build</strong></div>{renderJob(openedJob)}</div>}
+      {openedJob && <div className="inline-build"><div className="assistant-identity"><span className="jev-avatar"><Layers3 size={17} /></span><strong>Specialist build</strong></div>{renderJob(openedJob, startFresh)}</div>}
+      {backgroundJobs.map((job) => <div className="inline-build" key={job.job_id}><div className="assistant-identity"><span className="jev-avatar"><Layers3 size={17} /></span><strong>Active build · recovered from your workspace</strong></div>{renderJob(job, startFresh)}</div>)}
       {pending?.step === "review" && <div className="build-review"><div><span className="welcome-kicker">Ready for the factory</span><h2>Your specialist brief</h2></div><details><summary>Review requirements<ChevronDown size={15} /></summary><p>{pending.workflow}</p></details><div className="build-review-footer"><span>Training starts after you confirm.</span><button className="primary-action" onClick={() => confirm("build")} disabled={Boolean(busy)}><Layers3 size={16} />Build specialist<ArrowUpRight size={15} /></button></div></div>}
       {(pending?.step === "input" || pending?.step === "match") && <button className="inline-action" onClick={() => confirm("compare")} disabled={Boolean(busy)}>{pending.step === "match" ? "Confirm specialist & compare" : "Use my message as input"}<ArrowUpRight size={15} /></button>}
       <div ref={latest} />

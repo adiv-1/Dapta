@@ -77,6 +77,13 @@ class DevinClient:
         )
         return _session(payload)
 
+    def terminate_session(self, session_id: str) -> None:
+        try:
+            self._request("DELETE", f"/v3/organizations/{self.organization_id}/sessions/{session_id}")
+        except DevinError as error:
+            if error.status != 404:
+                raise
+
     def _request(
         self, method: str, path: str, payload: Mapping[str, Any] | None = None
     ) -> dict[str, Any]:
@@ -92,7 +99,8 @@ class DevinClient:
         )
         try:
             with urllib.request.urlopen(request, timeout=60) as response:
-                return json.loads(response.read().decode("utf-8"))
+                content = response.read().decode("utf-8")
+                return json.loads(content) if content.strip() else {}
         except urllib.error.HTTPError as error:
             body = error.read().decode("utf-8", errors="replace")
             raise DevinError(

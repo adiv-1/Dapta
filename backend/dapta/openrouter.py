@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from typing import Any, Callable, Mapping, Protocol
 
 from .ledger import UsageLedger, openrouter_usage
+from .cancellation import check_cancelled
 from .observability import ai_agent, ai_chat, log_event, mark_failed, record_ai_usage
 
 
@@ -132,6 +133,7 @@ class OpenRouterClient:
                     payload["max_tokens"] = max_tokens
                 if reasoning_effort:
                     payload["reasoning"] = {"effort": reasoning_effort}
+                check_cancelled()
                 response = self.transport.request(
                     "POST",
                     f"{self.base_url}/chat/completions",

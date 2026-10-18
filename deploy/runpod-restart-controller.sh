@@ -17,7 +17,7 @@ import json
 import os
 import urllib.request
 
-for path, terminal in (("jobs", {"ready", "failed"}), ("runs", {"completed", "failed"})):
+for path, terminal in (("jobs", {"ready", "failed", "cancelled"}), ("runs", {"completed", "failed"})):
     request = urllib.request.Request(
         f"http://127.0.0.1:8000/v1/{path}",
         headers={"X-Dapta-Token": os.environ["DAPTA_CONTROL_TOKEN"]},

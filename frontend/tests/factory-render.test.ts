@@ -7,7 +7,7 @@ import { test } from "node:test";
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 
-import { Registry } from "../src/App.tsx";
+import { Registry, FactoryTimeline } from "../src/App.tsx";
 import { AppErrorBoundary } from "../src/ErrorBoundary.tsx";
 import type { Job } from "../src/types.ts";
 import { container } from "./dom.ts";
@@ -17,6 +17,42 @@ import { container } from "./dom.ts";
 const stages = JSON.parse(readFileSync(new URL("./fixtures/factory-stages.json", import.meta.url), "utf8")) as Job[];
 const RECOVERY_SCREEN = "temporary display error";
 const styles = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
+
+test("every active stage offers confirmed cancellation; stopped jobs never offer retry", async () => {
+  const host = container(); const root = createRoot(host); const stopped: string[] = [];
+  const job = stages.find((item) => item.status === "integrating")!;
+  try {
+    for (const status of ["queued", "architecting", "integrating", "building_dataset", "validating", "awaiting_compute", "provisioning_gpu", "training", "evaluating", "publishing"]) {
+      await act(async () => root.render(createElement(FactoryTimeline, { key: status, job: { ...job, status }, onRetry: async () => undefined, onStop: async (id) => { stopped.push(id); } })));
+      const button = [...host.querySelectorAll("button")].find((item) => item.textContent === "Stop build")!;
+      assert.ok(button && !button.disabled, `stop available at ${status}`);
+    }
+    const button = [...host.querySelectorAll("button")].find((item) => item.textContent === "Stop build")!;
+    await act(async () => button.click());
+    assert.equal(stopped.length, 0);
+    assert.match(host.textContent!, /Already-incurred costs remain/);
+    await act(async () => ([...host.querySelectorAll("button")].find((item) => item.textContent === "Confirm stop")!).click());
+    assert.deepEqual(stopped, [job.job_id]);
+    await act(async () => root.render(createElement(FactoryTimeline, { job: { ...job, status: "cancelled", failure_code: undefined, failure_message: undefined }, onRetry: async () => { throw new Error("must not retry"); } })));
+    assert.match(host.textContent!, /Build stopped/);
+    assert.ok(!host.textContent!.includes("Retry failed stage"));
+    assert.ok(!host.querySelector(".pipeline-step.active"));
+  } finally { await act(async () => root.unmount()); host.remove(); }
+});
+
+test("stop errors are visible and cleanup failures offer Retry stop", async () => {
+  const host = container(); const root = createRoot(host); const job = stages.find((item) => item.status === "integrating")!;
+  const fail = async () => { throw new Error("Network unavailable; stop not confirmed"); };
+  try {
+    await act(async () => root.render(createElement(FactoryTimeline, { job, onRetry: async () => undefined, onStop: fail })));
+    await act(async () => ([...host.querySelectorAll("button")].find((item) => item.textContent === "Stop build")!).click());
+    await act(async () => ([...host.querySelectorAll("button")].find((item) => item.textContent === "Confirm stop")!).click());
+    assert.match(host.querySelector('[role="alert"]')?.textContent || "", /stop not confirmed/);
+    await act(async () => root.render(createElement(FactoryTimeline, { job: { ...job, status: "cancelling", cancellation: { cleanup_error: "Provider cleanup pending" } }, onRetry: async () => undefined, onStop: fail })));
+    assert.match(host.textContent!, /Provider cleanup pending/);
+    assert.ok([...host.querySelectorAll("button")].some((item) => item.textContent === "Retry stop"));
+  } finally { await act(async () => root.unmount()); host.remove(); }
+});
 
 function mount() {
   const root = createRoot(container());

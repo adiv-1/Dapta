@@ -100,6 +100,8 @@ class FactoryRuntimeTests(unittest.TestCase):
                 self.actions.append(("resume", reason))
 
         class Store:
+            def check_cancelled(self, job_id):
+                pass
             def get_artifact(self, *_):
                 return {"session_id": "session-1"}
 

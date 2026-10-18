@@ -306,7 +306,7 @@ def create_app(database_path: Path | str | None = None) -> FastAPI:
                     if event["sequence"] > last_sequence:
                         last_sequence = event["sequence"]
                         yield f"id: {last_sequence}\nevent: progress\ndata: {json.dumps(event)}\n\n"
-                if current["status"] in {"ready", "failed"}:
+                if current["status"] in {"ready", "failed", "cancelled"}:
                     yield f"event: complete\ndata: {json.dumps({'status': current['status']})}\n\n"
                     break
                 time.sleep(1)
@@ -328,6 +328,13 @@ def create_app(database_path: Path | str | None = None) -> FastAPI:
             return job
         except (JobNotFound, InvalidTransition, JobConflict) as error:
             raise HTTPException(status_code=409, detail=str(error)) from error
+
+    @app.post("/v1/jobs/{job_id}/cancel", status_code=202, dependencies=protected)
+    def cancel_job(job_id: str) -> dict[str, Any]:
+        try:
+            return _job_with_usage(runner.cancel(job_id), ledger)
+        except JobNotFound as error:
+            raise HTTPException(status_code=404, detail="job not found") from error
 
     @app.post("/v1/jobs/{job_id}/repair-evaluation", dependencies=protected)
     def repair_job_evaluation(job_id: str) -> dict[str, Any]:

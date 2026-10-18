@@ -111,6 +111,8 @@ export const api = {
     }),
   retryJob: (jobId: string) =>
     request<Job>(`/v1/jobs/${jobId}/retry`, { method: "POST", body: "{}" }),
+  cancelJob: (jobId: string) =>
+    request<Job>(`/v1/jobs/${jobId}/cancel`, { method: "POST", body: "{}" }),
   repairEvaluation: (jobId: string) =>
     request<Job>(`/v1/jobs/${jobId}/repair-evaluation`, { method: "POST", body: "{}" }),
 };

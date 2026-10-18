@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import subprocess
+import signal
 import sys
 import threading
 import time
@@ -15,10 +16,12 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from .devin import DevinClient, DevinError
+from .cancellation import BuildCancelled, BuildCleanupError, cancellation_check, check_cancelled
 from .jobs import (
     AdapterJobOrchestrator,
     JobBlocked,
     JobConflict,
+    JobNotFound,
     JobStore,
 )
 from .ledger import UsageLedger
@@ -94,6 +97,7 @@ class AgentDatasetSource:
         split_hashes: dict[str, str] = {}
         schema = skill_contract.get("output_schema") or {}
         for split, minimum in minimums.items():
+            check_cancelled()
             cases = dataset.get(split)
             if not isinstance(cases, list):
                 errors.append(f"{split} must be a list")
@@ -152,6 +156,7 @@ class DevinIntegrator:
         self, *, job: Mapping[str, Any], skill_contract: Mapping[str, Any]
     ) -> Mapping[str, Any]:
         job_id = str(job["job_id"])
+        self.store.check_cancelled(job_id)
         started = time.monotonic()
         polls = 0
         stage = current_factory_stage()
@@ -180,6 +185,7 @@ class DevinIntegrator:
             stage.suspend("devin_session")
         deadline = time.monotonic() + self.timeout_seconds
         while time.monotonic() < deadline:
+            self.store.check_cancelled(job_id)
             polls += 1
             try:
                 session = self.client.get_session(session_id)
@@ -233,7 +239,11 @@ class DevinIntegrator:
                           duration_ms=round((time.monotonic() - started) * 1000),
                           error_category=error_category(error))
                 raise error
-            time.sleep(self.poll_seconds)
+            # Observe a stop request promptly, even with a long provider poll interval.
+            wait_until = time.monotonic() + self.poll_seconds
+            while time.monotonic() < wait_until:
+                self.store.check_cancelled(job_id)
+                time.sleep(min(0.5, max(0, wait_until - time.monotonic())))
         if stage is not None:
             stage.resume("devin_timeout")
         error = DevinError("Devin integration timed out before producing tested evidence")
@@ -357,6 +367,7 @@ class RunPodTrainingBackend:
                 result_path=run_dir / "result.json",
                 training_clock=training_clock,
                 on_progress=on_progress,
+                job_id=job_id,
             )
         finally:
             completed = _now()
@@ -427,6 +438,7 @@ class RunPodTrainingBackend:
                 training_clock=clock,
                 on_progress=lambda item: store.record_progress(job_id, item),
                 evaluate_only=True,
+                job_id=job_id,
             )
         finally:
             completed = _now()
@@ -453,12 +465,20 @@ class RunPodTrainingBackend:
         training_clock: float,
         on_progress: Any,
         evaluate_only: bool = False,
+        job_id: str | None = None,
     ) -> dict[str, Any]:
         progress_stage = "evaluation" if evaluate_only else "training"
+        check_cancelled()
+        worker_store = JobStore(self.ledger.path) if job_id and self.ledger is not None else None
+        lease = {"restore_required": True, "pid": None, "bundle_path": str(bundle_path.resolve())}
+        if worker_store:
+            worker_store.set_artifact(job_id, "gpu_worker.json", lease)
         on_progress({"stage": progress_stage, "message": "Unloading inference model"})
-        self.lifecycle.unload()
+        process = None
         try:
-            command = [sys.executable, "-m", "dapta.factory_gpu", "--bundle", str(bundle_path)]
+            self.lifecycle.unload()
+            check_cancelled()
+            command = [sys.executable, "-m", "dapta.factory_gpu", "--bundle", str(bundle_path.resolve())]
             if evaluate_only:
                 command.append("--evaluate-only")
             process = subprocess.Popen(
@@ -468,15 +488,39 @@ class RunPodTrainingBackend:
                 text=True,
                 bufsize=1,
                 env={**os.environ, "PYTHONUNBUFFERED": "1"},
+                start_new_session=True,
             )
+            if worker_store:
+                lease.update(pid=process.pid, start_time=_process_start(process.pid))
+                worker_store.set_artifact(job_id, "gpu_worker.json", lease)
             telemetry_stage = current_factory_stage()
             if telemetry_stage is not None:
                 telemetry_stage.suspend("gpu_evaluation" if evaluate_only else "gpu_training")
             timed_out = threading.Event()
+            cancelled = threading.Event()
+            finished = threading.Event()
+            cancel_check = cancellation_check()
+
+            def terminate_worker() -> None:
+                _terminate_worker_process(process)
+
+            def watch_cancellation() -> None:
+                while not finished.wait(0.5):
+                    try:
+                        cancel_check()
+                    except BuildCancelled:
+                        cancelled.set()
+                        terminate_worker()
+                        return
+
+            watcher = None
+            if cancel_check is not None:
+                watcher = threading.Thread(target=watch_cancellation, daemon=True)
+                watcher.start()
 
             def stop_over_budget() -> None:
                 timed_out.set()
-                process.terminate()
+                terminate_worker()
 
             timer = threading.Timer(float(self.maximum_hours * Decimal(3600)), stop_over_budget)
             timer.daemon = True
@@ -502,7 +546,14 @@ class RunPodTrainingBackend:
                         on_progress(event)
                 code = process.wait()
             finally:
+                finished.set()
                 timer.cancel()
+                if watcher is not None:
+                    watcher.join(timeout=16)
+                if hasattr(process.stdout, "close"):
+                    process.stdout.close()
+            if cancelled.is_set():
+                raise BuildCancelled("GPU worker stopped at user request")
             if timed_out.is_set():
                 raise RuntimeError(
                     f"GPU worker exceeded the {self.maximum_hours}-hour training cap"
@@ -513,11 +564,53 @@ class RunPodTrainingBackend:
                 raise RuntimeError("GPU worker did not write result.json")
             return json.loads(result_path.read_text(encoding="utf-8"))
         finally:
+            if process is not None and getattr(process, "poll", lambda: 0)() is None:
+                try:
+                    _terminate_worker_process(process)
+                except Exception as error:
+                    raise BuildCleanupError("Worker shutdown could not be confirmed") from error
             telemetry_stage = current_factory_stage()
             if telemetry_stage is not None:
                 telemetry_stage.resume("gpu_worker_result")
             on_progress({"stage": progress_stage, "message": "Reloading inference model"})
-            self.lifecycle.load()
+            try:
+                self.lifecycle.load()
+                if worker_store:
+                    worker_store.set_artifact(job_id, "gpu_worker.json", {**lease, "restore_required": False, "stopped": True})
+            except Exception as error:
+                raise BuildCleanupError("Could not restore the inference model") from error
+
+    def recover_cancelled_worker(self, job_id: str, store: JobStore) -> None:
+        """Recover only this job's recorded Linux process after controller replacement."""
+        try:
+            lease = store.get_artifact(job_id, "gpu_worker.json")
+        except JobNotFound:
+            return
+        if not lease.get("restore_required"):
+            return
+        pid = lease.get("pid")
+        if isinstance(pid, int) and _process_start(pid) is not None:
+            command = Path(f"/proc/{pid}/cmdline").read_bytes().split(b"\0")
+            if (_process_start(pid) != lease.get("start_time") or os.getpgid(pid) != pid
+                    or b"dapta.factory_gpu" not in command
+                    or str(lease["bundle_path"]).encode() not in command):
+                raise RuntimeError("Worker identity changed; refusing to signal an unrelated process")
+            os.killpg(pid, signal.SIGTERM)
+            time.sleep(1)
+            try:
+                os.killpg(pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            deadline = time.monotonic() + 10
+            while _process_start(pid) is not None:
+                state = Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()[0]
+                if state == "Z":
+                    break
+                if time.monotonic() > deadline:
+                    raise RuntimeError("Orphaned worker has not exited")
+                time.sleep(.1)
+        self.lifecycle.load()
+        store.set_artifact(job_id, "gpu_worker.json", {**lease, "restore_required": False, "stopped": True})
 
     def _artifact(self, job_id: str, name: str, *, round: int = 1) -> Any:
         database = os.environ.get("DAPTA_LEDGER_PATH", "artifacts/dapta.sqlite3")
@@ -661,6 +754,8 @@ class FactoryRunner:
         self.stop_event = threading.Event()
         self.wake_event = threading.Event()
         self.thread: threading.Thread | None = None
+        self._cancelling: set[str] = set()
+        self._cancel_lock = threading.Lock()
 
     def start(self) -> None:
         if self.thread and self.thread.is_alive():
@@ -668,6 +763,8 @@ class FactoryRunner:
         self.store.recover_interrupted_stages()
         for job in self.store.list_jobs():
             self._mirror(job)
+            if job["status"] == "cancelling":
+                self._start_cancel_cleanup(job["job_id"])
         self.thread = threading.Thread(target=self._loop, name="dapta-factory", daemon=True)
         self.thread.start()
 
@@ -680,16 +777,84 @@ class FactoryRunner:
     def wake(self) -> None:
         self.wake_event.set()
 
+    def cancel(self, job_id: str) -> dict[str, Any]:
+        job = self.store.request_cancel(job_id)
+        if job["status"] == "cancelling":
+            self._start_cancel_cleanup(job_id)
+        self.wake()
+        return self.store.get_job(job_id)
+
+    def _start_cancel_cleanup(self, job_id: str) -> None:
+        with self._cancel_lock:
+            if job_id in self._cancelling:
+                return
+            self._cancelling.add(job_id)
+        threading.Thread(target=self._cancel_cleanup, args=(job_id,), name="dapta-stop-build", daemon=True).start()
+
+    def _cancel_cleanup(self, job_id: str) -> None:
+        stopped_session = None
+        try:
+            while True:
+                job = self.store.get_job(job_id)
+                if job["status"] != "cancelling":
+                    return
+                session_id = (job.get("devin_session") or {}).get("session_id")
+                # Also catches a session created concurrently with the stop request.
+                if session_id and session_id != stopped_session:
+                    integrator = self.orchestrator.integrator
+                    if integrator is None or not hasattr(integrator, "client"):
+                        raise RuntimeError("Devin cleanup is not configured")
+                    integrator.client.terminate_session(session_id)
+                    try:
+                        session = integrator.client.get_session(session_id)
+                        if session.status.lower() not in {"exit", "exited", "stopped", "cancelled", "failed", "error", "finished", "completed", "done"}:
+                            time.sleep(1)
+                            continue
+                        self.store.set_artifact(job_id, "devin_session.json", session.__dict__)
+                    except DevinError as error:
+                        if error.status != 404:
+                            raise
+                    stopped_session = session_id
+                if any(attempt["status"] == "running" for attempt in job["stage_attempts"]):
+                    time.sleep(0.5)
+                    continue
+                trainer = self.orchestrator.trainer
+                if trainer is not None and hasattr(trainer, "recover_cancelled_worker"):
+                    trainer.recover_cancelled_worker(job_id, self.store)
+                if (job.get("cancellation") or {}).get("inference_restore_required"):
+                    if trainer is None or not hasattr(trainer, "lifecycle"):
+                        raise RuntimeError("Inference recovery is not configured")
+                    trainer.lifecycle.load()
+                self.store.set_artifact(job_id, "cancellation.json", {"cleanup_complete": True, "message": "Build stopped. Existing adapters and saved artifacts are preserved."})
+                self.store.finish_cancel(job_id)
+                log_event("job_cancelled", job_id=job_id)
+                return
+        except Exception as error:
+            previous = self.store.get_job(job_id).get("cancellation") or {}
+            self.store.set_artifact(job_id, "cancellation.json", {**previous, "cleanup_error": "Cleanup could not be confirmed. Retry Stop build; no further build stages will start.", "error_type": type(error).__name__})
+            log_event("job_cancel_cleanup_pending", level="warning", job_id=job_id, error_type=type(error).__name__)
+        finally:
+            with self._cancel_lock:
+                self._cancelling.discard(job_id)
+            self._mirror(self.store.get_job(job_id))
+            self.wake()
+
     def run_once(self) -> bool:
-        active = [job for job in self.store.list_jobs() if job["status"] not in {"ready", "failed"}]
+        active = [job for job in self.store.list_jobs() if job["status"] not in {"ready", "failed", "cancelled"}]
         if not active:
             return False
         job = active[-1]
         job_id = job["job_id"]
+        if job["status"] == "cancelling":
+            if not (job.get("cancellation") or {}).get("cleanup_error"):
+                self._start_cancel_cleanup(job_id)
+            return False
         self._mirror(job)
         try:
             with root_transaction("dapta.adapter_build", job_id=job_id, status=job["status"]):
                 self.orchestrator.advance(job_id)
+        except BuildCancelled:
+            return False
         except JobBlocked as blocked:
             self.store.record_progress(job_id, {
                 "stage": job["status"], "message": str(blocked),
@@ -717,6 +882,30 @@ class FactoryRunner:
             self.mirror.sync_job(job, self.store)
         except Exception as error:
             capture_exception(error, job_id=job["job_id"], stage="supabase_mirror")
+
+
+def _terminate_worker_process(process: Any) -> None:
+    # Only called for our own Popen with start_new_session=True.
+    try:
+        os.killpg(process.pid, signal.SIGTERM)
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            os.killpg(process.pid, signal.SIGKILL)
+            process.wait(timeout=10)
+        try:
+            os.killpg(process.pid, signal.SIGKILL)  # also stop children ignoring SIGTERM
+        except ProcessLookupError:
+            pass
+    except ProcessLookupError:
+        process.wait(timeout=10)
+
+
+def _process_start(pid: int) -> str | None:
+    try:
+        return Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()[19]
+    except FileNotFoundError:
+        return None
 
 
 def _normalize_case(case: Any, split: str, index: int) -> dict[str, Any]:

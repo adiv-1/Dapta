@@ -12,6 +12,21 @@ import { container } from "./dom.ts";
 const newRoute: RouteDecision = { decision: "create_adapter", adapter_id: null, confidence: .9, reason: "A new repeatable workflow.", source: "jev" };
 const existingRoute: RouteDecision = { ...newRoute, decision: "existing_adapter", adapter_id: "test-adapter", reason: "A suitable specialist exists." };
 
+test("refresh or New conversation never hides a still-active build", async () => {
+  const host = container(); const root = createRoot(host);
+  const job = { job_id: "running-build", status: "training" } as Job;
+  try {
+    await act(async () => root.render(createElement(Conversation, {
+      adapters: [], jobs: [job], runs: [], onRun: () => undefined, onJob: () => undefined,
+      renderRun: () => null, renderJob: () => createElement("div", null, "Recovered build with stop control"),
+      openLibrary: () => undefined, clearAdapter: () => undefined, clearJob: () => undefined,
+    })));
+    assert.match(host.textContent!, /Recovered build with stop control/);
+    await act(async () => ([...host.querySelectorAll("button")].find((item) => item.textContent?.includes("New conversation"))!).click());
+    assert.match(host.textContent!, /Recovered build with stop control/);
+  } finally { await act(async () => root.unmount()); host.remove(); }
+});
+
 async function mountConversation() {
   const host = container(); const root = createRoot(host);
   await act(async () => root.render(createElement(Conversation, {

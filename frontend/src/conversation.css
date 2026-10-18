@@ -51,6 +51,14 @@
 .routing-live { display: flex; align-items: center; gap: 8px; color: #889e73; font-size: 12px; padding: 8px 0; }
 .reply-error { color: #a75d4f !important; font-size: 12px; line-height: 1.7; }
 .inline-build { margin: 26px 0; }
+.build-stop-control { position: sticky; top: 80px; z-index: 5; display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 14px 18px; margin: 0 0 22px; background: #f6f9f1; border: 1px solid #dae5d0; border-radius: 12px; box-shadow: 0 4px 16px #233b1710; }
+.build-stop-control strong { font-size: 12px; color: #395630; }
+.build-stop-control p { font-size: 11px; color: #79876e; margin: 4px 0 0; max-width: 740px; line-height: 1.6; }
+.build-stop-control > div:last-child { display: flex; gap: 8px; flex-shrink: 0; }
+.build-stop-control button { border: 1px solid #d7e1ce; border-radius: 8px; background: white; color: #4e6242; font-size: 11px; padding: 9px 12px; cursor: pointer; }
+.build-stop-control .stop-build { border-color: #dfb9a5; color: #9b5331; }
+.build-stop-control button:disabled { opacity: .5; cursor: wait; }
+@media (max-width: 620px) { .build-stop-control { top: 74px; flex-wrap: wrap; } }
 .inline-build > .assistant-identity { max-width: 780px; margin: 0 auto 20px; }
 .inline-build .factory-head p { font-size: 12px; line-height: 1.7; max-height: 100px; overflow-y: auto; }
 .build-review { max-width: 780px; margin: 20px auto; padding: 22px; border: 1px solid #dce5d2; border-radius: 17px; background: white; }
