@@ -21,6 +21,9 @@ services:
       context: ..
       dockerfile: deploy/Dockerfile.worker
     env_file: ../.env
+    environment:
+      # This image runs the in-process transformers runtime; the vLLM backend is RunPod-only.
+      DAPTA_QWEN_BACKEND: transformers
     expose:
       - "8001"
     deploy:

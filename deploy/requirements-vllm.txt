@@ -1,0 +1,4 @@
+# Serving-only environment for the vLLM Qwen worker backend (/workspace/dapta/.venv-vllm).
+# Kept separate from backend/requirements.txt: vLLM pins torch 2.13 / transformers 5.x, while
+# QLoRA training pins torch 2.7.1 / transformers 4.57.3 / peft / bitsandbytes.
+vllm==0.30.0
