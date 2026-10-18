@@ -161,6 +161,33 @@ class OpenRouterTests(unittest.TestCase):
         })
         self.assertEqual(result, {"result": "ok"})
 
+    def test_fenced_or_prefaced_json_is_parsed_without_repairing_values(self):
+        for content in (
+            '```json\n{"result":"ok"}\n```',
+            'Here is the requested object:\n{"result":"ok"}',
+        ):
+            with self.subTest(content=content):
+                result = _response_json({"choices": [{"message": {"content": content}}]})
+                self.assertEqual(result, {"result": "ok"})
+
+    def test_anthropic_request_omits_unsupported_response_format(self):
+        transport = FakeTransport([
+            {
+                "id": None,
+                "choices": [{"message": {"content": '{"result":"ok"}'}}],
+                "usage": {"prompt_tokens": 1, "completion_tokens": 1},
+            },
+        ])
+        client = OpenRouterClient(
+            api_key="test-key", ledger=self.ledger, transport=transport, sleep=lambda _: None,
+        )
+        client.complete_json(
+            run_id="job-1", stage="compare", agent_role="frontier_a",
+            model="anthropic/claude-opus-4.1", messages=[{"role": "user", "content": "NDA"}],
+            max_tokens=100,
+        )
+        self.assertNotIn("response_format", transport.calls[0]["payload"])
+
     def test_reasoning_budget_exhaustion_has_a_specific_error(self):
         with self.assertRaisesRegex(OpenRouterError, "reasoning exhausted"):
             _response_json({

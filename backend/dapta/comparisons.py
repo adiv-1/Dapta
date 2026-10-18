@@ -15,6 +15,8 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any, Callable, Iterator, Mapping
 
+from jsonschema import Draft202012Validator
+
 from .config import Settings
 from .ledger import UsageLedger
 from .observability import (
@@ -525,9 +527,17 @@ class ComparisonService:
         self, document_text: str, results: dict[str, Any], metadata: Mapping[str, Any]
     ) -> None:
         required_fields = list(metadata.get("required_fields") or [])
+        output_schema = metadata.get("output_schema")
+        validator = (
+            Draft202012Validator(output_schema)
+            if isinstance(output_schema, Mapping) and output_schema
+            else None
+        )
         for result in results.values():
             output = result.get("output")
             valid = isinstance(output, dict) and bool(output)
+            if valid and validator is not None:
+                valid = not any(validator.iter_errors(output))
             present = 0
             grounded = 0
             fields = required_fields or (list(output) if isinstance(output, dict) else [])

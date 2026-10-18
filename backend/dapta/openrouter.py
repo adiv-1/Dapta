@@ -115,7 +115,6 @@ class OpenRouterClient:
                     "model": model,
                     "messages": messages,
                     "temperature": temperature,
-                    "response_format": {"type": "json_object"},
                     "usage": {"include": True},
                     "user": run_id,
                     "trace": {
@@ -125,6 +124,10 @@ class OpenRouterClient:
                         "generation_name": agent_role,
                     },
                 }
+                # Anthropic models currently do not advertise response_format support through
+                # OpenRouter. Their JSON is still required by the prompt and parsed defensively.
+                if not model.startswith("anthropic/"):
+                    payload["response_format"] = {"type": "json_object"}
                 if max_tokens is not None:
                     payload["max_tokens"] = max_tokens
                 if reasoning_effort:
@@ -369,11 +372,19 @@ def _response_json(response: Mapping[str, Any]) -> dict[str, Any]:
             raise OpenRouterError(
                 "OpenRouter returned no assistant content because reasoning exhausted the completion budget"
             )
-    content = _content_text(content)
+    content = _content_text(content).strip()
     try:
         value = json.loads(content)
-    except json.JSONDecodeError as error:
-        raise OpenRouterError("OpenRouter agent did not return valid JSON") from error
+    except json.JSONDecodeError:
+        # Some providers wrap otherwise valid JSON in a Markdown fence or one short sentence even
+        # when explicitly asked for raw JSON. Accept one complete object, but never repair values.
+        if content.startswith("```"):
+            content = content.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+        start = content.find("{")
+        try:
+            value, _ = json.JSONDecoder().raw_decode(content[start:]) if start >= 0 else (None, 0)
+        except json.JSONDecodeError as error:
+            raise OpenRouterError("OpenRouter agent did not return valid JSON") from error
     if not isinstance(value, dict):
         raise OpenRouterError("OpenRouter agent response must be a JSON object")
     return value

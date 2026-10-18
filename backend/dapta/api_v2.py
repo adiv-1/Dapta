@@ -549,8 +549,34 @@ def _validate_candidates(candidates: dict[str, Any]) -> dict[str, Any]:
 
 def _seed_demo_data(store: JobStore, comparisons: ComparisonStore) -> None:
     adapter_id = "nda-intake/qwen3-vl-8b-v1"
+    skill_path = Path(__file__).parent / "skills" / "nda-intake" / "SKILL.md"
+    skill_prompt = skill_path.read_text(encoding="utf-8").strip()
+    metadata = {
+        "name": "NDA Intake",
+        "description": "Long NDA to normalized legal intake JSON",
+        "keywords": ["nda", "non-disclosure", "legal", "agreement", "contract"],
+        "required_fields": ["effective_date", "jurisdiction", "parties", "term"],
+        "output_schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["effective_date", "jurisdiction", "parties", "term"],
+            "properties": {
+                "effective_date": {"type": ["string", "null"]},
+                "jurisdiction": {"type": ["string", "null"]},
+                "parties": {"type": "array", "items": {"type": "string"}},
+                "term": {"type": ["string", "null"]},
+            },
+        },
+        "status": "ready",
+        "benchmark_accuracy": 0.7074626865671643,
+        "training_minutes": 13.7073,
+        "training_cost_usd": "0",
+        "skill_prompt": skill_prompt,
+        "skill_path": "backend/dapta/skills/nda-intake/SKILL.md",
+        "skill_sha256": hashlib.sha256(skill_prompt.encode("utf-8")).hexdigest(),
+    }
     try:
-        store.get_adapter(adapter_id)
+        existing = store.get_adapter(adapter_id)
     except JobNotFound:
         store.register_adapter(
             adapter_id=adapter_id,
@@ -558,20 +584,13 @@ def _seed_demo_data(store: JobStore, comparisons: ComparisonStore) -> None:
             version="v1",
             base_model="Qwen/Qwen3-VL-8B-Instruct",
             artifact_uri="hf://adityave/dapta-lora-adapters/nda-intake/qwen3-vl-8b-v1",
-            metadata={
-                "name": "NDA Intake",
-                "description": "Long NDA to normalized legal intake JSON",
-                "keywords": ["nda", "non-disclosure", "legal", "agreement", "contract"],
-                "required_fields": ["effective_date", "jurisdiction", "parties", "term"],
-                "status": "ready",
-                "benchmark_accuracy": 0.7074626865671643,
-                "training_minutes": 13.7073,
-                "training_cost_usd": "0",
-                "skill_prompt": (
-                    "Extract effective date, jurisdiction, contracting parties, and term from the NDA. "
-                    "Preserve source wording, use null when absent, and return one JSON object."
-                ),
-            },
+            metadata=metadata,
+        )
+    else:
+        store.update_adapter(
+            adapter_id=adapter_id,
+            artifact_uri=str(existing["artifact_uri"]),
+            metadata={**dict(existing.get("metadata") or {}), **metadata},
         )
     comparisons.put_benchmark("nda-kleister-v1", _nda_benchmark())
 

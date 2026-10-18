@@ -23,6 +23,43 @@ class GenerateRequest(BaseModel):
     adapter_id: str
 
 
+NDA_ADAPTER_ID = "nda-intake/qwen3-vl-8b-v1"
+NDA_SHORT_SYSTEM = (
+    "Complete the NDA intake form using the learned workflow. Return JSON only."
+)
+NDA_USER_INSTRUCTION = """Fill this NDA intake form.
+
+Return exactly:
+{
+  "effective_date": "YYYY-MM-DD or null",
+  "jurisdiction": "jurisdiction or null",
+  "parties": ["party names"],
+  "term": "normalized term or null"
+}
+
+NDA:
+"""
+
+
+def generation_messages(request: GenerateRequest) -> list[dict[str, str]]:
+    """Build the inference prompt; the NDA path intentionally matches its frozen benchmark."""
+    if request.adapter_id == NDA_ADAPTER_ID:
+        return [
+            {"role": "system", "content": NDA_SHORT_SYSTEM},
+            {"role": "user", "content": NDA_USER_INSTRUCTION + request.document_text},
+        ]
+    return [
+        {
+            "role": "system",
+            "content": "Complete the requested learned workflow. Return valid JSON only.",
+        },
+        {
+            "role": "user",
+            "content": f"Workflow: {request.workflow}\n\nDocument:\n{request.document_text}",
+        },
+    ]
+
+
 class ModelRuntime:
     def __init__(self) -> None:
         self.model: Any = None
@@ -98,16 +135,7 @@ class ModelRuntime:
 
         if self.model is None or self.processor is None:
             raise RuntimeError("model is not loaded")
-        messages = [
-            {
-                "role": "system",
-                "content": "Complete the requested learned workflow. Return valid JSON only.",
-            },
-            {
-                "role": "user",
-                "content": f"Workflow: {request.workflow}\n\nDocument:\n{request.document_text}",
-            },
-        ]
+        messages = generation_messages(request)
         with self.lock, torch.inference_mode():
             self.select_adapter(request.adapter_id)
             text = self.processor.apply_chat_template(
