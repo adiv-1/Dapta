@@ -55,6 +55,7 @@ export function Conversation({ adapters, jobs, runs, onRun, onJob, renderRun, re
     const workflow = pending ? `${pending.workflow}\n\nUser clarification:\n${text}${pending.step !== "input" && file ? `\nExample input:\n${file.text}` : ""}` : text;
     setTurns((current) => [...current, { id, text, file: file?.name }]);
     setDraft(""); setAttachment(undefined); setError(undefined); setBusy("JEV is finding the right path");
+    if (input.current) input.current.style.height = "";
     clearJob(); clearAdapter();
     try {
       // Every submitted message, including clarification, goes through the same router.

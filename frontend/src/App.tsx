@@ -15,8 +15,8 @@ type PerformanceView = "live" | "lift";
 
 const labels: Record<string, string> = {
   qwen_lora: "Qwen LoRA",
-  frontier_a: "Claude Opus 5.5",
-  frontier_b: "GPT-5.6 Sol",
+  frontier_a: "Claude",
+  frontier_b: "GPT",
 };
 
 function recordPoll(event: PollTelemetry) {
