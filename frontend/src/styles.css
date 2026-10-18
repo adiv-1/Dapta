@@ -68,6 +68,7 @@ main { min-height: calc(100vh - 72px); }
 .factory-error li { margin-top: 3px; }
 .factory-error button { padding: 9px 11px; }
 .pipeline { max-height: 760px; overflow-y: auto; padding-right: 8px; scrollbar-width: thin; }
+.benchmark-notice { color: #c6cfda; line-height: 1.6; padding: 14px; border: 1px solid #554826; border-radius: 10px; background: #1d1a10; }
 
 @media (max-width: 900px) {
   .factory-totals { grid-template-columns: repeat(2, minmax(0, 1fr)); }

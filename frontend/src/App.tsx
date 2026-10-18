@@ -150,7 +150,10 @@ export default function App() {
             jobs={jobs}
             selectedJob={selectedJob}
             setSelectedJob={setSelectedJob}
-            onTest={() => setTab("chat")}
+            onTest={(adapter) => {
+              if (adapter) setPrompt(String(adapter.metadata.description || adapter.skill_id));
+              setTab("chat");
+            }}
             onRetry={async (jobId) => {
               const retried = await api.retryJob(jobId);
               setJobs((current) => current.map((item) => item.job_id === jobId ? retried : item));
@@ -248,7 +251,7 @@ const factoryStages = [
 
 function Registry({ adapters, jobs, selectedJob, setSelectedJob, onTest, onRetry }: {
   adapters: Adapter[]; jobs: Job[]; selectedJob?: string;
-  setSelectedJob: (id: string) => void; onTest: () => void;
+  setSelectedJob: (id: string) => void; onTest: (adapter?: Adapter) => void;
   onRetry: (jobId: string) => Promise<void>;
 }) {
   const job = jobs.find((item) => item.job_id === selectedJob) || jobs[0];
@@ -261,13 +264,13 @@ function Registry({ adapters, jobs, selectedJob, setSelectedJob, onTest, onRetry
         </div>
       )}
       {job && <FactoryTimeline job={job} onRetry={onRetry} />}
-      <div className="registry-heading"><div><h2>Adapter registry</h2><p>Ready specialists restored from Hugging Face.</p></div><button onClick={onTest}><Plus size={16} />New specialist</button></div>
+      <div className="registry-heading"><div><h2>Adapter registry</h2><p>Ready specialists restored from Hugging Face.</p></div><button onClick={() => onTest()}><Plus size={16} />New specialist</button></div>
       <div className="registry-grid">
         {adapters.map((adapter) => {
           const needsRepair = adapter.metadata.benchmark_status === "needs_repair";
-          return <article className="adapter-card" key={adapter.adapter_id}><div className="adapter-icon"><FileText /></div><span className={needsRepair ? "building-pill" : "ready"}><span />{needsRepair ? "Benchmark repair" : "Ready"}</span><h2>{String(adapter.metadata.name || adapter.skill_id)}</h2><p>{String(adapter.metadata.description || "Reusable LoRA adapter")}</p><dl><div><dt>Base model</dt><dd>{adapter.base_model.split("/").pop()}</dd></div><div><dt>Benchmark</dt><dd>{needsRepair ? "Pending rerun" : `${(Number(adapter.metadata.benchmark_accuracy || 0) * 100).toFixed(1)}% F1`}</dd></div><div><dt>Version</dt><dd>{adapter.version}</dd></div><div><dt>Training cost</dt><dd>${Number(adapter.metadata.training_cost_usd || 0).toFixed(3)}</dd></div></dl><button onClick={onTest}>Test adapter</button></article>;
+          return <article className="adapter-card" key={adapter.adapter_id}><div className="adapter-icon"><FileText /></div><span className={needsRepair ? "building-pill" : "ready"}><span />{needsRepair ? "Benchmark repair" : "Ready"}</span><h2>{String(adapter.metadata.name || adapter.skill_id)}</h2><p>{String(adapter.metadata.description || "Reusable LoRA adapter")}</p><dl><div><dt>Base model</dt><dd>{adapter.base_model.split("/").pop()}</dd></div><div><dt>Benchmark</dt><dd>{needsRepair ? "Pending rerun" : `${(Number(adapter.metadata.benchmark_accuracy || 0) * 100).toFixed(1)}% F1`}</dd></div><div><dt>Version</dt><dd>{adapter.version}</dd></div><div><dt>Training cost</dt><dd>${Number(adapter.metadata.training_cost_usd || 0).toFixed(3)}</dd></div></dl><button onClick={() => onTest(adapter)}>Test adapter</button></article>;
         })}
-        {!adapters.length && <button className="new-card" onClick={onTest}><Plus /><span>Create a new specialist</span></button>}
+        {!adapters.length && <button className="new-card" onClick={() => onTest()}><Plus /><span>Create a new specialist</span></button>}
       </div>
     </section>
   );
@@ -466,6 +469,9 @@ function TrainingTelemetry({ progress }: { progress: NonNullable<Job["progress"]
 
 function FactoryResults({ evaluation }: { evaluation: NonNullable<Job["deterministic_evaluation"]> }) {
   const labels: Record<string, string> = { base_no_skill: "Qwen Base", base_with_skill: "Qwen + Skill", lora_short_prompt: "Qwen LoRA" };
+  if (evaluation.evaluation_verified === false || evaluation.benchmark_status === "needs_repair") {
+    return <div className="factory-results"><div className="results-title"><h3>Frozen TEST results</h3><span className="fail">NOT SCORED</span></div><p className="benchmark-notice">All four LoRA generations completed, but the evaluator capped every output before valid JSON finished. These outputs are intentionally not reported as 0% scores. Apply the benchmark repair above to score the saved weights without retraining.</p></div>;
+  }
   return <div className="factory-results"><div className="results-title"><h3>Frozen TEST results</h3><span className={evaluation.passed ? "pass" : "fail"}>{evaluation.passed ? "PASS" : "REPAIR"}</span></div><div>{Object.entries(evaluation.conditions || {}).map(([name, result]) => <section key={name}><strong>{labels[name] || name}</strong><b>{((result.field_f1 || 0) * 100).toFixed(1)}% F1</b><small>{((result.schema_pass_rate || 0) * 100).toFixed(1)}% schema · {((result.exact_form_rate || 0) * 100).toFixed(1)}% exact</small></section>)}</div></div>;
 }
 
