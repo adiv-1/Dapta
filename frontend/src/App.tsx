@@ -3,15 +3,15 @@ import * as Sentry from "@sentry/react";
 import {
   Activity, ArrowUp, BarChart3, BrainCircuit, Check, Clock3, Cpu,
   Database, FileText, Layers3, Loader2, PackageCheck, Plus, Router,
-  ShieldCheck, Sparkles, Upload, UploadCloud, Wrench, X,
+  ShieldCheck, Sparkles, Upload, UploadCloud, Wrench, X, ChevronDown,
 } from "lucide-react";
 import { api } from "./api";
+import { Conversation, AdapterDrawer } from "./Conversation";
 import { PollCoordinator, type PollTelemetry } from "./polling";
 import type { Adapter, Benchmark, Condition, Job, Run } from "./types";
 
-type Tab = "chat" | "performance" | "skills";
+type Tab = "chat" | "performance";
 type PerformanceView = "live" | "lift";
-type ActivityState = "idle" | "uploading" | "routing" | "comparing";
 
 const labels: Record<string, string> = {
   qwen_lora: "Qwen LoRA",
@@ -45,40 +45,32 @@ export default function App() {
   const [selectedRun, setSelectedRun] = useState<string>();
   const [selectedBenchmark, setSelectedBenchmark] = useState<string>();
   const [selectedJob, setSelectedJob] = useState<string>();
-  const [prompt, setPrompt] = useState("Extract the NDA into a normalized legal intake form.");
-  const [documentText, setDocumentText] = useState("");
-  const [fileName, setFileName] = useState<string>();
-  const [busy, setBusy] = useState(false);
-  const [activity, setActivity] = useState<ActivityState>("idle");
+  const [suggestedAdapter, setSuggestedAdapter] = useState<Adapter>();
+  const [libraryOpen, setLibraryOpen] = useState(false);
   const [error, setError] = useState<string>();
-  const fileInput = useRef<HTMLInputElement>(null);
   const polls = useRef(new PollCoordinator());
   const knownStages = useRef(new Map<string, string>());
+  const closeLibrary = useCallback(() => setLibraryOpen(false), []);
 
   const refresh = useCallback(async () => polls.current.run(async () => {
-    const [adaptersResult, benchmarksResult, runsResult, jobsResult] = await Promise.allSettled([
-      api.adapters(), api.benchmarks(), api.runs(), api.jobs(),
-    ]);
-    if (adaptersResult.status === "fulfilled") setAdapters(adaptersResult.value);
-    if (benchmarksResult.status === "fulfilled") {
-      setBenchmarks(benchmarksResult.value);
-      setSelectedBenchmark((current) => current || benchmarksResult.value[0]?.benchmark_id);
+    const results = await Promise.allSettled([api.adapters(), api.benchmarks(), api.runs(), api.jobs()]);
+    const [adapterResult, benchmarkResult, runResult, jobResult] = results;
+    if (adapterResult.status === "fulfilled") setAdapters(adapterResult.value);
+    if (benchmarkResult.status === "fulfilled") {
+      setBenchmarks(benchmarkResult.value);
+      setSelectedBenchmark((current) => current || benchmarkResult.value[0]?.benchmark_id);
     }
-    if (runsResult.status === "fulfilled") {
-      setRuns(runsResult.value);
-      setSelectedRun((current) => current || runsResult.value[0]?.run_id);
+    if (runResult.status === "fulfilled") {
+      setRuns(runResult.value);
+      setSelectedRun((current) => current || runResult.value[0]?.run_id);
     }
-    if (jobsResult.status === "fulfilled") {
-      setJobs(jobsResult.value);
-      setSelectedJob((current) => current || jobsResult.value[0]?.job_id);
-    }
-    const failure = [adaptersResult, benchmarksResult, runsResult, jobsResult]
-      .find((result) => result.status === "rejected");
+    if (jobResult.status === "fulfilled") setJobs(jobResult.value);
+    const failure = results.find((result) => result.status === "rejected");
     if (failure?.status === "rejected") throw failure.reason;
+    setError(undefined);
   }, recordPoll), []);
 
-  useEffect(() => { refresh().catch((reason) => setError(reason.message)); }, [refresh]);
-
+  useEffect(() => { refresh().catch((reason) => setError(reason instanceof Error ? reason.message : "Could not load saved work")); }, [refresh]);
   useEffect(() => {
     const active = runs.some((run) => !["completed", "failed"].includes(run.status))
       || jobs.some((job) => !["ready", "failed"].includes(job.status));
@@ -88,228 +80,92 @@ export default function App() {
     }), 1500);
     return () => window.clearInterval(timer);
   }, [runs, jobs, refresh]);
-
   useEffect(() => {
     for (const job of jobs) {
       const previous = knownStages.current.get(job.job_id);
-      if (previous && previous !== job.status) {
-        Sentry.addBreadcrumb({
-          category: "dapta.factory",
-          message: "stage_transitioned",
-          level: "info",
-          data: { job_id: job.job_id, previous_stage: previous, next_stage: job.status },
-        });
-      }
+      if (previous && previous !== job.status) Sentry.addBreadcrumb({
+        category: "dapta.factory", message: "stage_transitioned", level: "info",
+        data: { job_id: job.job_id, previous_stage: previous, next_stage: job.status },
+      });
       knownStages.current.set(job.job_id, job.status);
     }
-    const current = jobs.find((job) => job.job_id === selectedJob) || jobs[0];
-    Sentry.setTag("dapta.factory_stage", current?.status || "none");
+    Sentry.setTag("dapta.factory_stage", jobs.find((job) => job.job_id === selectedJob)?.status || "none");
   }, [jobs, selectedJob]);
 
-  const currentRun = runs.find((run) => run.run_id === selectedRun);
-  const currentBenchmark = benchmarks.find((item) => item.benchmark_id === selectedBenchmark);
-
-  async function onFile(file?: File) {
-    if (!file) return;
-    setBusy(true);
-    setActivity("uploading");
-    setError(undefined);
+  async function retry(jobId: string) {
     try {
-      const extracted = await api.extract(file);
-      setDocumentText(extracted.text);
-      setFileName(extracted.filename);
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Could not read the file");
-    } finally {
-      setBusy(false);
-      setActivity("idle");
-    }
+      const job = jobs.find((item) => item.job_id === jobId);
+      const retried = job?.failure_code === "EvaluationOutputTruncated"
+        ? await api.repairEvaluation(jobId) : await api.retryJob(jobId);
+      setJobs((current) => current.map((item) => item.job_id === jobId ? retried : item));
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not retry this stage"); }
   }
-
-  async function submit() {
-    if (!prompt.trim()) return;
-    setBusy(true);
-    setActivity("routing");
-    setSelectedRun(undefined);
-    setError(undefined);
-    try {
-      const route = await api.route(prompt);
-      if (route.decision === "unsupported") {
-        throw new Error(route.reason || "This workflow is not supported.");
-      }
-      if (route.decision === "existing_adapter" && route.adapter_id) {
-        if (!documentText.trim()) {
-          throw new Error("Paste or upload a document before running this adapter.");
-        }
-        if (route.requires_confirmation && !window.confirm(
-          `Use the matched adapter ${route.adapter_id}?\n\n${route.reason}`,
-        )) return;
-        setActivity("comparing");
-        const run = await api.compare(prompt, documentText, route.adapter_id, fileName);
-        setRuns((current) => [run, ...current]);
-        setSelectedRun(run.run_id);
-      } else {
-        const job = await api.createJob(prompt, route);
-        setJobs((current) => [job, ...current]);
-        setSelectedJob(job.job_id);
-        setTab("skills");
-      }
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Request failed");
-    } finally {
-      setBusy(false);
-      setActivity("idle");
-    }
-  }
-
-  return (
-    <div className="app-shell">
-      <header className="topbar">
-        <a className="brand" href="#" aria-label="Dapta home">
-          <span className="brand-lockup"><img src="/dapta-chameleon.png" alt="" /><span className="brand-word">Dapta</span></span>
-        </a>
-        <nav>
-          <TabButton active={tab === "chat"} onClick={() => setTab("chat")}>Chat</TabButton>
-          <TabButton active={tab === "performance"} onClick={() => setTab("performance")}>Performance</TabButton>
-          <TabButton active={tab === "skills"} onClick={() => setTab("skills")}>Skills & Adapters</TabButton>
-        </nav>
-        <span className="secure-pill"><span />Invite-only demo</span>
-      </header>
-
-      <main>
-        {error && <div className="error-banner">{error}</div>}
-        {tab === "chat" && (
-          <Chat
-            prompt={prompt} setPrompt={setPrompt} documentText={documentText}
-            setDocumentText={setDocumentText} fileName={fileName} busy={busy} activity={activity}
-            fileInput={fileInput} onFile={onFile} submit={submit} run={currentRun}
-          />
-        )}
-        {tab === "performance" && (
-          <Performance
-            view={view} setView={setView} runs={runs} selectedRun={selectedRun}
-            setSelectedRun={setSelectedRun} run={currentRun} benchmarks={benchmarks}
-            selectedBenchmark={selectedBenchmark} setSelectedBenchmark={setSelectedBenchmark}
-            benchmark={currentBenchmark}
-          />
-        )}
-        {tab === "skills" && (
-          <Registry
-            adapters={adapters}
-            jobs={jobs}
-            selectedJob={selectedJob}
-            setSelectedJob={setSelectedJob}
-            onTest={(adapter) => {
-              if (adapter) setPrompt(String(adapter.metadata.description || adapter.skill_id));
-              setTab("chat");
-            }}
-            onRetry={async (jobId) => {
-              const current = jobs.find((item) => item.job_id === jobId);
-              const retried = current?.failure_code === "EvaluationOutputTruncated"
-                ? await api.repairEvaluation(jobId)
-                : await api.retryJob(jobId);
-              setJobs((current) => current.map((item) => item.job_id === jobId ? retried : item));
-            }}
-          />
-        )}
-      </main>
-    </div>
-  );
+  return <div className="app-shell">
+    <header className="topbar">
+      <a className="brand" href="#" aria-label="Dapta home" onClick={() => setTab("chat")}><span className="brand-lockup"><img src="/dapta-chameleon.png" alt="" /><span className="brand-word">Dapta</span></span></a>
+      <nav aria-label="Main navigation"><TabButton active={tab === "chat"} onClick={() => setTab("chat")}>Chat</TabButton><TabButton active={tab === "performance"} onClick={() => setTab("performance")}>Performance</TabButton></nav>
+      <span className="secure-pill"><span />Private workspace</span>
+    </header>
+    <main>
+      {error && <div className="error-banner" role="alert">{error}<button onClick={() => refresh().catch(() => undefined)}>Try again</button></div>}
+      <div hidden={tab !== "chat"}><Conversation adapters={adapters} jobs={jobs} runs={runs}
+        onRun={(run) => { setRuns((current) => [run, ...current.filter((item) => item.run_id !== run.run_id)]); setSelectedRun(run.run_id); }}
+        onJob={(job) => setJobs((current) => [job, ...current.filter((item) => item.job_id !== job.job_id)])}
+        renderRun={(run) => <ModelGrid run={run} running={!run || ["queued", "running"].includes(run.status)} />}
+        renderJob={(job) => <FactoryTimeline job={job} onRetry={retry} />}
+        openLibrary={() => setLibraryOpen(true)} selectedAdapter={suggestedAdapter} clearAdapter={() => setSuggestedAdapter(undefined)}
+        openedJob={jobs.find((job) => job.job_id === selectedJob)} clearJob={() => setSelectedJob(undefined)}
+      /></div>
+      {tab === "performance" && <Performance view={view} setView={setView} runs={runs} selectedRun={selectedRun}
+        setSelectedRun={setSelectedRun} run={runs.find((run) => run.run_id === selectedRun)} benchmarks={benchmarks}
+        selectedBenchmark={selectedBenchmark} setSelectedBenchmark={setSelectedBenchmark}
+        benchmark={benchmarks.find((item) => item.benchmark_id === selectedBenchmark)} />}
+    </main>
+    {libraryOpen && <AdapterDrawer adapters={adapters} jobs={jobs} onClose={closeLibrary}
+      onSelect={(adapter) => { setSuggestedAdapter(adapter); setLibraryOpen(false); setTab("chat"); }}
+      onOpenJob={(job) => { setSelectedJob(job.job_id); setLibraryOpen(false); setTab("chat"); }} />}
+  </div>;
 }
 
-function Chat(props: {
-  prompt: string; setPrompt: (value: string) => void; documentText: string;
-  setDocumentText: (value: string) => void; fileName?: string; busy: boolean;
-  activity: ActivityState;
-  fileInput: React.RefObject<HTMLInputElement>; onFile: (file?: File) => void;
-  submit: () => void; run?: Run;
-}) {
-  const compact = Boolean(props.run) || props.activity === "comparing";
-  const showingModels = Boolean(props.run) || ["routing", "comparing"].includes(props.activity);
-  return (
-    <section className={compact ? "chat-page compact" : "chat-page"}>
-      <div className="chat-intro"><span className="eyebrow"><Sparkles size={14} /> Model comparison</span><h1>One document. Three models. <em>Measured fairly.</em></h1><p>Watch the same task run through the LoRA specialist, Claude Opus 5.5, and GPT-5.6 Sol—then compare speed, tokens, dollars, and grounded accuracy.</p></div>
-      <div className="composer">
-        <label htmlFor="workflow">What should the models do?</label>
-        <textarea id="workflow" value={props.prompt} onChange={(event) => props.setPrompt(event.target.value)} aria-label="Workflow" />
-        <label htmlFor="document">Document</label>
-        <textarea id="document" className="document-input" value={props.documentText} onChange={(event) => props.setDocumentText(event.target.value)} placeholder="Paste document text or upload a PDF…" aria-label="Document text" />
-        <div className="composer-row">
-          <input ref={props.fileInput} type="file" accept=".pdf,.txt,.md,.json,.csv" hidden onChange={(event) => props.onFile(event.target.files?.[0])} />
-          <button className="attach" onClick={() => props.fileInput.current?.click()}><Upload size={16} />{props.fileName || "Upload document"}</button>
-          <button className="run-button" disabled={props.busy || !props.prompt.trim()} onClick={props.submit}>{props.busy ? <Loader2 className="spin" size={18} /> : <ArrowUp size={18} />}{activityLabel(props.activity)}</button>
-        </div>
-      </div>
-      {showingModels && <ModelGrid run={props.run} preparing={props.activity === "routing"} running={props.activity === "comparing" || props.run?.status === "queued" || props.run?.status === "running"} />}
-    </section>
-  );
-}
-
-function activityLabel(activity: ActivityState) {
-  if (activity === "uploading") return "Reading document…";
-  if (activity === "routing") return "Matching workflow…";
-  if (activity === "comparing") return "Models are working…";
-  return "Run comparison";
-}
-
-function ModelGrid({ run, preparing, running }: { run?: Run; preparing: boolean; running: boolean }) {
-  const conditions = ["qwen_lora", "frontier_a", "frontier_b"];
-  const startedAt = useRef(Date.now());
-  useEffect(() => { if (preparing || running) startedAt.current = Date.now(); }, [preparing, running]);
-  const now = useLiveNow(preparing || running);
-  const elapsed = Math.max(0, Math.floor((now - startedAt.current) / 1000));
-  const phase = preparing ? "Matching the best adapter" : elapsed < 3 ? "Reading the skill and document" : elapsed < 8 ? "Generating a structured answer" : "Validating and measuring the result";
-  return <><ComparisonScoreboard run={run} running={preparing || running} /><div className="model-grid" aria-live="polite">{conditions.map((name) => <ModelCard key={name} name={name} condition={run?.results[name]} running={preparing || running} phase={phase} />)}</div></>;
-}
-
-const pendingModels: Record<string, string> = {
-  qwen_lora: "Qwen3-VL-8B + Dapta LoRA",
-  frontier_a: "anthropic/claude-opus-5.5",
-  frontier_b: "openai/gpt-5.6-sol",
-};
-
-function ModelCard({ name, condition, running, phase }: { name: string; condition?: Condition; running: boolean; phase: string }) {
-  const metrics = condition?.metrics;
-  const completed = condition?.status === "completed";
-  const status = completed ? "completed" : condition?.status || (running ? "working" : "queued");
-  const totalTokens = Number(metrics?.input_tokens || 0) + Number(metrics?.output_tokens || 0);
-  return (
-    <article className="model-card">
-      <div className="model-head"><span className={`model-dot ${name}`} /><div><strong>{condition?.label || labels[name]}</strong><small>{condition?.model || pendingModels[name]}</small></div><span className={`status ${completed ? "complete" : ""}`}>{completed ? <Check size={14} /> : <Loader2 className={running ? "spin" : ""} size={14} />}{status}</span></div>
-      {condition ? <pre>{JSON.stringify(condition.output, null, 2)}</pre> : <div className="model-working"><div className="working-orbit"><Loader2 className="spin" /></div><strong>{phase}</strong><span>The result will appear here as soon as this model finishes.</span><div className="working-track"><span /></div></div>}
-      <div className="model-stats"><div><small>Speed</small><strong>{metrics?.latency_ms ? `${(metrics.latency_ms / 1000).toFixed(2)}s` : "—"}</strong></div><div><small>Total tokens</small><strong>{completed ? totalTokens.toLocaleString() : "—"}</strong><span>{completed ? `${metrics?.input_tokens ?? 0} in · ${metrics?.output_tokens ?? 0} out` : "Waiting for usage"}</span></div><div><small>Cost</small><strong>{completed ? `$${Number(metrics?.cost_usd || 0).toFixed(5)}` : "—"}</strong></div></div>
-    </article>
-  );
-}
-
-type ScoreMetric = { key: string; label: string; helper: string; value: (condition?: Condition) => number | null; format: (value: number) => string; detail?: (condition?: Condition) => string };
-
-function ComparisonScoreboard({ run, running }: { run?: Run; running: boolean }) {
+export function ModelGrid({ run, running }: { run?: Run; running: boolean }) {
   const names = ["qwen_lora", "frontier_a", "frontier_b"];
-  const metrics: ScoreMetric[] = [
-    { key: "speed", label: "Speed", helper: "Lower is faster", value: (condition) => condition?.status === "completed" && condition.metrics.latency_ms != null ? condition.metrics.latency_ms / 1000 : null, format: (value) => `${value.toFixed(2)}s` },
-    { key: "tokens", label: "Total tokens", helper: "Input + output", value: (condition) => condition?.status === "completed" ? Number(condition.metrics.input_tokens || 0) + Number(condition.metrics.output_tokens || 0) : null, format: (value) => value.toLocaleString(), detail: (condition) => `${condition?.metrics.input_tokens ?? 0} in · ${condition?.metrics.output_tokens ?? 0} out` },
-    { key: "cost", label: "Cost", helper: "Lower is cheaper", value: (condition) => condition?.status === "completed" ? Number(condition.metrics.cost_usd || 0) : null, format: (value) => `$${value.toFixed(5)}` },
+  const now = useLiveNow(running);
+  const elapsed = run ? Math.max(0, (now - Date.parse(run.created_at)) / 1000) : 0;
+  const complete = names.every((name) => run?.results[name]?.status === "completed");
+  const metrics = [
+    { key: "speed", label: "Time", unit: "seconds", value: (c?: Condition) => c?.status === "completed" && c.metrics.latency_ms != null ? c.metrics.latency_ms / 1000 : null, format: (v: number) => v.toFixed(2) },
+    { key: "tokens", label: "Tokens", unit: "input + output", value: (c?: Condition) => c?.status === "completed" && c.metrics.input_tokens != null && c.metrics.output_tokens != null ? c.metrics.input_tokens + c.metrics.output_tokens : null, format: (v: number) => v.toLocaleString() },
+    { key: "cost", label: "Cost", unit: "USD / request", value: (c?: Condition) => c?.status === "completed" && c.metrics.cost_usd != null && c.metrics.cost_usd !== "" ? Number(c.metrics.cost_usd) : null, format: (v: number) => "$" + v.toFixed(5) },
   ];
-  const bestByMetric = new Map(metrics.map((metric) => {
-    const values = names.map((name) => metric.value(run?.results[name])).filter((value): value is number => value != null);
-    return [metric.key, values.length ? Math.min(...values) : null];
-  }));
-  const wins = new Map(names.map((name) => [name, metrics.filter((metric) => {
-    const value = metric.value(run?.results[name]);
-    const best = bestByMetric.get(metric.key);
-    return value != null && best != null && Math.abs(value - best) < 0.000001;
-  }).length]));
-  return <section className="comparison-scoreboard"><div className="scoreboard-heading"><div><span>Core comparison</span><h2>Speed, tokens, and cost—side by side.</h2></div><p>These are the three numbers Dapta is built to improve. Lower is better across every row.</p></div><div className="scoreboard-grid"><div className="scoreboard-corner">Metric</div>{names.map((name) => {
-    const condition = run?.results[name];
-    return <div className={`scoreboard-model ${name}`} key={name}><strong>{condition?.label || labels[name]}</strong><span>{running && !condition ? "Working…" : `${wins.get(name) || 0} of 3 wins`}</span></div>;
-  })}{metrics.map((metric) => <div className="scoreboard-row" key={metric.key}><div className="scoreboard-metric"><strong>{metric.label}</strong><span>{metric.helper}</span></div>{names.map((name) => {
-    const condition = run?.results[name];
-    const value = metric.value(condition);
-    const best = bestByMetric.get(metric.key);
-    const isBest = value != null && best != null && Math.abs(value - best) < 0.000001;
-    return <div className={`scoreboard-value ${isBest ? "best" : ""}`} key={name}>{value == null ? <><Loader2 className={running ? "spin" : ""} size={18} /><strong>—</strong></> : <><strong>{metric.format(value)}</strong>{isBest && <b>Best</b>}</>}{metric.detail && value != null && <span>{metric.detail(condition)}</span>}</div>;
-  })}</div>)}</div></section>;
+  return <section className="result-workspace" aria-label="Model comparison">
+    <div className="result-heading"><div><span className="welcome-kicker">{running ? "Comparison in progress" : "The difference, measured"}</span><h2>Same task. Every model.</h2></div><span className="result-note">Lower time, tokens & cost is better</span></div>
+    <div className="comparison-scroll"><table className="comparison-matrix">
+      <thead><tr><th><span>One input.</span><small>Three approaches.</small></th>{names.map((name) => {
+        const condition = run?.results[name];
+        const status = condition?.status;
+        return <th key={name} className={name}><div className="comparison-model"><i /><strong>{condition?.label || labels[name]}</strong></div><span className={status === "failed" ? "result-failed" : "result-status"}>{status === "completed" ? <><Check size={12} />Complete</> : status === "failed" ? <><X size={12} />Failed</> : running ? <><Loader2 size={12} className="spin" />Working{elapsed > 0 ? " · " + Math.floor(elapsed) + "s elapsed" : ""}</> : "No result"}</span></th>;
+      })}</tr></thead><tbody>{metrics.map((metric) => {
+        const values = names.map((name) => metric.value(run?.results[name]));
+        const allKnown = complete && values.every((value) => value != null && Number.isFinite(value));
+        const best = allKnown ? Math.min(...values as number[]) : null;
+        const tied = allKnown && values.every((value) => value === best);
+        const maximum = Math.max(...values.filter((v): v is number => v != null), 0);
+        return <tr key={metric.key}><th scope="row"><strong>{metric.label}</strong><span>{metric.unit}</span></th>{names.map((name, index) => {
+          const value = values[index];
+          const winner = best != null && value === best && !tied;
+          const c = run?.results[name];
+          return <td key={name} className={winner ? "metric-winner" : ""}><div className="metric-number">{value != null && Number.isFinite(value) ? metric.format(value) : "—"}{winner && <span className="metric-best">Lowest</span>}{tied && <span className="metric-tie">Equal</span>}</div>{metric.key === "tokens" && c?.status === "completed" && value != null && <small className="token-detail">{c.metrics.input_tokens?.toLocaleString()} input · {c.metrics.output_tokens?.toLocaleString()} output</small>}<div className="metric-line"><span className={name} style={{ width: value != null && maximum ? Math.max(2, value / maximum * 100) + "%" : "0%" }} /></div></td>;
+        })}</tr>;
+      })}<tr className="quality-row"><th scope="row"><strong>Quality check</strong><span>Saved evaluation</span></th>{names.map((name) => {
+        const condition = run?.results[name]; const score = condition?.metrics.accuracy;
+        return <td key={name}>{condition?.status === "completed" && score != null ? <span className="quality-value"><ShieldCheck size={14} />{score.toFixed(1)}%</span> : <span className="quality-unknown">Not scored</span>}</td>;
+      })}</tr></tbody></table></div>
+    <details className="comparison-outputs" open><summary><span>Model responses</span><ChevronDown size={16} /></summary><div className="response-grid">{names.map((name) => {
+      const condition = run?.results[name];
+      return <article key={name} className="response-panel" aria-label={(condition?.label || labels[name]) + " response"}><span className="response-label">{condition?.label || labels[name]}</span>{condition?.status === "failed" ? <p role="alert" className="reply-error">{condition.error || "This model could not complete the request."}</p> : condition?.status === "completed" ? <pre>{JSON.stringify(condition.output, null, 2)}</pre> : <div className="response-wait"><Loader2 className={running ? "spin" : ""} size={18} /><span>{running ? "Waiting for the model’s response…" : "No response available."}</span></div>}</article>;
+    })}</div></details>
+    <details className="comparison-method"><summary>How this comparison is measured</summary><p>All models receive the same task and input. The LoRA specialist uses its compact skill prompt; frontier models receive the full skill. Time and usage come from completed calls. Cost is the recorded request cost; unavailable costs stay blank. Quality is a per-document evaluation, not a held-out benchmark. Provider tokenizers differ.</p><div>{names.map((name) => <span key={name}>{run?.results[name]?.model || labels[name]}{run?.results[name]?.metrics.accuracy_label ? " · " + run.results[name].metrics.accuracy_label : ""}</span>)}</div></details>
+  </section>;
 }
 
 function Performance(props: {
@@ -321,12 +177,12 @@ function Performance(props: {
   const conditions = props.view === "live" ? liveConditions(props.run) : benchmarkConditions(props.benchmark);
   return (
     <section className="page performance-page">
-      <div className="page-title"><span><Activity size={18} /> Evidence</span><h1>Speed, cost, and accuracy</h1><p>Every result below is saved evidence. Reviewing a run never calls a model again.</p></div>
+      <div className="page-title"><span><Activity size={18} /> Saved evidence</span><h1>Every run tells a story.</h1><p>Review the seconds, tokens, dollars, and quality behind your work.</p></div>
       <div className="segmented"><button className={props.view === "live" ? "active" : ""} onClick={() => props.setView("live")}>Comparison runs</button><button className={props.view === "lift" ? "active" : ""} onClick={() => props.setView("lift")}>Training benchmarks</button></div>
       <div className="run-pills">
-        {props.view === "live" ? props.runs.map((run) => <button className={props.selectedRun === run.run_id ? "active" : ""} onClick={() => props.setSelectedRun(run.run_id)} key={run.run_id}>{new Date(run.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}<small>{run.attachment_name || run.status}</small></button>) : props.benchmarks.map((item) => <button className={props.selectedBenchmark === item.benchmark_id ? "active" : ""} onClick={() => props.setSelectedBenchmark(item.benchmark_id)} key={item.benchmark_id}>{item.name}<small>{item.test_documents} frozen cases</small></button>)}
+        {props.view === "lift" && props.benchmarks.map((item) => <button className={props.selectedBenchmark === item.benchmark_id ? "active" : ""} onClick={() => props.setSelectedBenchmark(item.benchmark_id)} key={item.benchmark_id}>{item.name}<small>{item.test_documents} frozen cases</small></button>)}
       </div>
-      {conditions.length ? <><Summary conditions={conditions} /><div className="chart-grid"><MetricChart title="Speed" suffix="s" lower conditions={conditions} field="time" /><MetricChart title="Cost" suffix="$" lower conditions={conditions} field="cost" /><MetricChart title="Grounded accuracy" suffix="%" conditions={conditions} field="accuracy" /></div></> : <EmptyState text="Run a comparison to populate performance." />}
+      {props.view === "live" ? props.run ? <ModelGrid run={props.run} running={["queued", "running"].includes(props.run.status)} /> : <EmptyState text="Your completed comparisons will appear here." /> : conditions.length ? <><Summary conditions={conditions} /><div className="chart-grid"><MetricChart title="Speed" suffix="s" lower conditions={conditions} field="time" /><MetricChart title="Cost" suffix="$" lower conditions={conditions} field="cost" /><MetricChart title="Accuracy" suffix="%" conditions={conditions} field="accuracy" /></div></> : <EmptyState text="No training benchmarks yet." />}
       {props.view === "lift" && props.benchmark && <p className="fine-print">Frozen test SHA-256: <code>{props.benchmark.test_sha256}</code>. Accuracy is labeled field F1; schema validity and exact-form rate remain available in the saved benchmark.</p>}
       {props.view === "live" && <RunHistoryTable runs={props.runs} selectedRun={props.selectedRun} setSelectedRun={props.setSelectedRun} />}
     </section>
@@ -345,11 +201,12 @@ function MetricChart({ title, suffix, lower, conditions, field }: { title: strin
 }
 
 function RunHistoryTable({ runs, selectedRun, setSelectedRun }: { runs: Run[]; selectedRun?: string; setSelectedRun: (id: string) => void }) {
-  const ordered = [...runs].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
-  return <section className="history-section"><div className="history-heading"><div><span>Previous completed runs</span><h2>Comparison history</h2></div><small>Most recent first</small></div>{ordered.length ? <div className="table-scroll"><table><thead><tr><th>Date &amp; time</th><th>Speed</th><th>Cost</th><th>Accuracy</th><th>Overall winner</th></tr></thead><tbody>{ordered.map((run) => {
+  const ordered = runs.filter((run) => run.status === "completed").sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
+  return <section className="history-section"><div className="history-heading"><div><span>Previous completed runs</span><h2>Comparison history</h2></div><small>Most recent first</small></div>{ordered.length ? <div className="table-scroll"><table><thead><tr><th>Date &amp; time</th><th>Speed</th><th>Tokens</th><th>Cost</th><th>Quality</th><th>Overall winner</th></tr></thead><tbody>{ordered.map((run) => {
     const conditions = liveConditions(run);
+    const tokens = Object.entries(run.results).filter(([, value]) => value.status === "completed" && value.metrics.input_tokens != null && value.metrics.output_tokens != null).map(([name, value]) => ({ name, label: value.label || labels[name] || name, time: 0, cost: 0, accuracy: Number(value.metrics.input_tokens) + Number(value.metrics.output_tokens) }));
     const overall = overallWinner(conditions);
-    return <tr key={run.run_id} className={selectedRun === run.run_id ? "selected" : ""} onClick={() => setSelectedRun(run.run_id)}><td><strong>{new Date(run.created_at).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}</strong><span>{new Date(run.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span></td><td><strong>{winningLabel(conditions, "time", true)}</strong><span>{conditions.length ? `${Math.min(...conditions.map((item) => item.time)).toFixed(2)}s` : "—"}</span></td><td><strong>{winningLabel(conditions, "cost", true)}</strong><span>{conditions.length ? `$${Math.min(...conditions.map((item) => item.cost)).toFixed(5)}` : "—"}</span></td><td><strong>{winningLabel(conditions, "accuracy", false)}</strong><span>{conditions.length ? `${Math.max(...conditions.map((item) => item.accuracy)).toFixed(1)}%` : "—"}</span></td><td><span className="winner-pill">{overall}</span></td></tr>;
+    return <tr key={run.run_id} className={selectedRun === run.run_id ? "selected" : ""} onClick={() => setSelectedRun(run.run_id)}><td><button className="history-select" onClick={() => setSelectedRun(run.run_id)} aria-label={`Review comparison from ${new Date(run.created_at).toLocaleString()}`}>{new Date(run.created_at).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}</button><span>{new Date(run.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span></td><td><strong>{winningLabel(conditions, "time", true)}</strong><span>{conditions.length ? `${Math.min(...conditions.map((item) => item.time)).toFixed(2)}s` : "—"}</span></td><td><strong>{tokens.length === 3 ? winningLabel(tokens, "accuracy", true) : "—"}</strong><span>{tokens.length === 3 ? Math.min(...tokens.map((item) => item.accuracy)).toLocaleString() : "Usage unavailable"}</span></td><td><strong>{winningLabel(conditions, "cost", true)}</strong><span>{conditions.length ? `$${Math.min(...conditions.map((item) => item.cost)).toFixed(5)}` : "—"}</span></td><td><strong>{winningLabel(conditions, "accuracy", false)}</strong><span>{conditions.length ? `${Math.max(...conditions.map((item) => item.accuracy)).toFixed(1)}%` : "—"}</span></td><td><span className="winner-pill">{overall}</span></td></tr>;
   })}</tbody></table></div> : <EmptyState text="Completed comparisons will appear here." />}</section>;
 }
 

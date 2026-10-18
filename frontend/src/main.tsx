@@ -4,6 +4,7 @@ import App from "./App";
 import { AppErrorBoundary } from "./ErrorBoundary";
 import { initializeSentry } from "./sentry";
 import "./styles.css";
+import "./conversation.css";
 
 initializeSentry();
 

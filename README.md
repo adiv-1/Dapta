@@ -33,9 +33,9 @@ Implemented and tested:
 - private Supabase mirroring for factory stages and agent artifacts; uploaded
   judge documents, credentials, and internal reasoning are never mirrored.
 - RunPod controller/model worker with dynamic Hugging Face LoRA loading.
-- private Base44 React app with a light Dapta brand, visible three-model work
-  states, speed/cost/accuracy evidence, chronological comparison history, and
-  a model-labeled Skills & Adapters pipeline.
+- private Base44 React app with a conversational JEV workflow, guided specialist
+  creation, a prior-adapter drawer, inline build progress, and a shared
+  speed/token/cost comparison with saved history.
 - Base44 authentication boundary, secret proxy, and durable run/job snapshots.
 - Sentry backend traces/logs plus masked React Session Replay configuration and
   an explicit factory feedback panel that separates operational repair,
@@ -90,19 +90,30 @@ the worker starts.
 
 ## Product experience
 
-The Chat tab keeps the workflow and document composer visible and immediately
-shows all three model cards while work is in progress. Each card advances from
-adapter routing through reading, generation, and validation before showing the
-saved output and its latency, input/output tokens, and dollar cost.
+Chat has one message composer with optional attachments. Each message and
+clarification calls the routing endpoint and shows its decision inline,
+including whether it used JEV or the registry fallback. Existing specialists
+request missing input in the conversation. New specialists collect the output
+contract and representative examples, then wait for **Build specialist** before
+creating a paid factory job. Follow-up questions are a guided intake flow;
+the existing router remains responsible for choosing the path.
+
+Comparisons show latency, total tokens, and recorded cost once in an aligned
+three-model matrix, with quality checks and expandable outputs underneath.
+Live calls show their actual pending/completed/failed status; unavailable costs
+stay blank and metric winners appear only after all three calls complete.
+Playfair Display is reserved for the brand; Inter is used throughout the
+working interface with tabular numerals for metrics.
 
 The Performance tab uses unambiguous **Comparison runs** and **Training
 benchmarks** views. Equal accuracy is reported as `Equal` instead of awarding a
 false winner. Completed comparisons are listed newest-first with the speed,
 cost, accuracy, and overall winner for each run.
 
-The Skills & Adapters tab names each factory step separately from the model or
-service powering it. Sentry status travels with the pipeline, while the
-retraining panel applies this decision order:
+**Prior adapters** opens a bottom drawer containing reusable specialists and
+build history. Selecting a specialist returns to chat for routing. Build
+progress stays in the conversation, with each stage and its provider visible.
+The factory feedback panel applies this decision order:
 
 1. Repair infrastructure or an incomplete evaluation before judging quality.
 2. Rerun a truncated benchmark without retraining existing weights.
