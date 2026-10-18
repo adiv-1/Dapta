@@ -9,6 +9,49 @@ type RequestPayload = {
   file?: { name: string; type?: string; base64: string };
 };
 
+const ndaAdapter = {
+  adapter_id: "nda-intake/qwen3-vl-8b-v1",
+  skill_id: "nda-intake",
+  version: "v1",
+  base_model: "Qwen/Qwen3-VL-8B-Instruct",
+  artifact_uri: "hf://adityave/dapta-lora-adapters/nda-intake/qwen3-vl-8b-v1",
+  created_at: "2026-10-17T00:00:00Z",
+  metadata: {
+    name: "NDA Intake",
+    description: "Long NDA to normalized legal intake JSON",
+    status: "ready",
+    benchmark_accuracy: 0.7074626865671643,
+    training_minutes: 13.7073,
+    training_cost_usd: "0",
+  },
+};
+
+const ndaBenchmark = {
+  benchmark_id: "nda-kleister-v1",
+  name: "NDA Intake — Kleister frozen test",
+  created_at: "2026-10-17T00:00:00Z",
+  view: "adapter_lift",
+  test_documents: 83,
+  test_sha256: "b5a42b7d8c4d9c634bf17eff469b18f4207750c4a028b150b9517564d6ebba65",
+  conditions: {
+    base_no_skill: {
+      label: "Qwen Base", accuracy: 57.57997218358831,
+      schema_validity: 98.79518072289156, exact_form_rate: 6.024096385542169,
+      latency_seconds: 1.82796287110845, input_tokens: 291462, output_tokens: 4947,
+    },
+    base_with_skill: {
+      label: "Qwen + Skill", accuracy: 61.28133704735376,
+      schema_validity: 98.79518072289156, exact_form_rate: 8.433734939759036,
+      latency_seconds: 1.7702271022048388, input_tokens: 303331, output_tokens: 4738,
+    },
+    lora_short_prompt: {
+      label: "Qwen LoRA", accuracy: 70.74626865671643,
+      schema_validity: 85.54216867469879, exact_form_rate: 33.734939759036145,
+      latency_seconds: 2.1004295580602177, input_tokens: 291379, output_tokens: 3282,
+    },
+  },
+};
+
 export default async function (request: Request): Promise<Response> {
   const base44 = createClientFromRequest(request);
   const user = await base44.auth.me();
@@ -23,6 +66,8 @@ export default async function (request: Request): Promise<Response> {
   const controllerUrl = secrets.get("DAPTA_CONTROLLER_URL");
   const controllerToken = secrets.get("DAPTA_CONTROL_TOKEN");
   if (!controllerUrl || !controllerToken) {
+    const fallback = registryFallback(payload.path, method);
+    if (fallback !== undefined) return Response.json(fallback);
     return Response.json({ detail: "Dapta controller is not configured" }, { status: 503 });
   }
 
@@ -47,6 +92,14 @@ export default async function (request: Request): Promise<Response> {
 
   if (upstream.ok) await mirrorSnapshots(base44, payload.path, result);
   return Response.json(result, { status: upstream.status });
+}
+
+function registryFallback(path: string, method: string): unknown | undefined {
+  if (method !== "GET") return undefined;
+  if (path === "/v1/adapters") return [ndaAdapter];
+  if (path === "/v1/benchmarks") return [ndaBenchmark];
+  if (path === "/v1/runs" || path === "/v1/jobs") return [];
+  return undefined;
 }
 
 async function mirrorSnapshots(base44: any, path: string, result: any): Promise<void> {
