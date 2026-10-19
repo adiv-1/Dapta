@@ -171,6 +171,11 @@ venv.bak/
 # Local agent/editor context
 .cursor/
 
+# Keep internal documentation and nested READMEs local
+docs/
+**/README.md
+!/README.md
+
 # Dapta generated artifacts
 artifacts/
 datasets/generated/
